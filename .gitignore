@@ -1,0 +1,56 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+*.egg-info/
+dist/
+build/
+*.db
+*.sqlite3
+
+# FastAPI
+.env
+.env.local
+
+# ML Models
+*.pkl
+*.h5
+*.pth
+models/*.json
+!models/.gitkeep
+
+# Flutter/Dart
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+.pub-cache/
+.pub/
+build/
+*.iml
+*.class
+.gradle/
+.idea/
+*.swp
+
+# Mobile
+.DS_Store
+.android/
+.ios/
+
+# IDE
+.vscode/
+*.code-workspace
+.idea/
+
+# Logs
+*.log
+
+# OS
+Thumbs.db
+.DS_Store
