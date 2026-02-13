@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'blood_sugar_check_screen.dart';
+import 'bp_check_screen.dart';
 
 class VitalsScreen extends StatefulWidget {
   const VitalsScreen({super.key});
@@ -186,8 +187,11 @@ class _VitalsScreenState extends State<VitalsScreen> {
                   icon: Icons.favorite_border,
                   gradientColors: [Colors.pink.shade400, Colors.pink.shade600],
                   onTap: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Coming soon!')),
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => BPCheckScreen(),
+                      ),
                     );
                   },
                 ),

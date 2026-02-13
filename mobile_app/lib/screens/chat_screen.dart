@@ -9,6 +9,8 @@ import '../models/symptom_report.dart';
 import '../models/chat_message.dart';
 import 'result_screen.dart';
 import 'vitals_screen.dart';
+import 'nearest_medical_facility_screen.dart';
+import 'nearest_hospital_clinics_screen.dart';
 
 class ChatScreen extends StatefulWidget {
   const ChatScreen({super.key});
@@ -196,7 +198,7 @@ class _ChatScreenState extends State<ChatScreen> {
         _isListening = false;
    
 
-  Future<void> _handleAutoDetect() async {
+  Future<void> handleAutoDetect() async {
     final text = _textController.text.trim();
     if (text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -327,19 +329,19 @@ class _ChatScreenState extends State<ChatScreen> {
             decoration: BoxDecoration(
               color: Colors.green[700],
             ),
-            child: Column(
+            child: const Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
-                const Icon(
+                Icon(
                   Icons.health_and_safety,
                   color: Colors.white,
                   size: 48,
                 ),
-                const SizedBox(height: 16),
+                SizedBox(height: 16),
                 Text(
                   'ArogyaAI Health',
-                  style: const TextStyle(
+                  style: TextStyle(
                     color: Colors.white,
                     fontSize: 24,
                     fontWeight: FontWeight.bold,
@@ -369,24 +371,28 @@ class _ChatScreenState extends State<ChatScreen> {
               );
             },
           ),
-          ListTile(
-            leading: const Icon(Icons.phone, color: Colors.green),
-            title: const Text('Call Nearest Doctor'),
-            onTap: () async {
-              Navigator.pop(context);
-              final status = await Permission.location.status;
-              if (status.isGranted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Finding nearest doctors...'),
-                    duration: Duration(seconds: 2),
-                  ),
+            ListTile(
+              leading: const Icon(Icons.local_hospital, color: Colors.green),
+              title: const Text('Nearest Medical Facility'),
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const NearestMedicalFacilityScreen()),
                 );
-              } else {
-                _requestLocationPermission();
-              }
-            },
-          ),
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.medical_services, color: Colors.green),
+              title: const Text('Nearest Hospital & Clinics'),
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const NearestHospitalClinicsScreen()),
+                );
+              },
+            ),
           ListTile(
             leading: const Icon(Icons.favorite, color: Colors.green),
             title: const Text('Vitals'),

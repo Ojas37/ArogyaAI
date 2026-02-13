@@ -3,7 +3,6 @@ import '../models/symptom_report.dart';
 import '../models/triage_result.dart';
 import '../services/api_service.dart';
 import '../services/offline_triage_service.dart';
-import 'connectivity_provider.dart';
 
 class TriageProvider with ChangeNotifier {
   TriageResult? _currentResult;
@@ -19,7 +18,8 @@ class TriageProvider with ChangeNotifier {
   bool get isLoading => _isLoading;
   String? get error => _error;
 
-  Future<void> analyzeSymptoms(SymptomReport report, {bool isOnline = true}) async {
+  Future<void> analyzeSymptoms(SymptomReport report,
+      {bool isOnline = true}) async {
     _isLoading = true;
     _error = null;
     _currentReport = report;
@@ -43,7 +43,8 @@ class TriageProvider with ChangeNotifier {
     }
   }
 
-  Future<void> addVitals(double? spo2, double? temperature, double? heartRate) async {
+  Future<void> addVitals(
+      double? spo2, double? temperature, double? heartRate) async {
     if (_currentReport == null) return;
 
     // Create vitals map
