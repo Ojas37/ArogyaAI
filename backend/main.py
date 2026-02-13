@@ -4,12 +4,30 @@ from pydantic import BaseModel
 from typing import List, Optional, Dict
 from datetime import datetime
 import uvicorn
+from language_detector import LanguageDetector
+from intent_classifier import IntentClassifier
 
 app = FastAPI(
     title="ArogyaAI Healthcare API",
     description="AI-powered symptom checker and triage system",
     version="1.0.0"
 )
+
+# Initialize Language Detector
+try:
+    language_detector = LanguageDetector()
+    print("✅ Language detector initialized successfully")
+except Exception as e:
+    print(f"⚠️  Language detector initialization failed: {e}")
+    language_detector = None
+
+# Initialize Intent Classifier
+try:
+    intent_classifier = IntentClassifier()
+    print("✅ Intent classifier initialized successfully")
+except Exception as e:
+    print(f"⚠️  Intent classifier initialization failed: {e}")
+    intent_classifier = None
 
 # CORS middleware - allow mobile app to call API
 app.add_middleware(
@@ -38,6 +56,27 @@ class TriageResult(BaseModel):
     redFlags: List[str]
     nextSteps: List[str]
 
+class LanguageDetectionRequest(BaseModel):
+    text: str
+
+class LanguageDetectionResponse(BaseModel):
+    language: str
+    confidence: float
+    detected_language_name: Optional[str] = None
+
+class IntentClassificationRequest(BaseModel):
+    text: str
+    top_k: Optional[int] = 1
+
+class IntentPrediction(BaseModel):
+    intent: str
+    confidence: float
+
+class IntentClassificationResponse(BaseModel):
+    intent: str
+    confidence: float
+    all_predictions: List[IntentPrediction]
+
 # ==================== Root Endpoint ====================
 
 @app.get("/")
@@ -48,6 +87,8 @@ async def root():
         "status": "running",
         "endpoints": [
             "/api/v1/symptom/analyze",
+            "/api/v1/language/detect",
+            "/api/v1/intent/classify",
             "/api/v1/health",
             "/docs"
         ]
@@ -136,6 +177,92 @@ async def analyze_symptoms(report: SymptomReport):
         raise HTTPException(status_code=500, detail=f"Error analyzing symptoms: {str(e)}")
 
 # ==================== Additional Endpoints ====================
+
+@app.post("/api/v1/language/detect", response_model=LanguageDetectionResponse)
+async def detect_language(request: LanguageDetectionRequest):
+    """
+    Detect the language of input text using fastText model
+    Supports 176 languages including all Indian languages
+    """
+    try:
+        if language_detector is None:
+            raise HTTPException(
+                status_code=503, 
+                detail="Language detection service is not available"
+            )
+        
+        result = language_detector.detect(request.text)
+        
+        # Map language codes to full names
+        language_names = {
+            "hi": "Hindi",
+            "en": "English",
+            "mr": "Marathi",
+            "gu": "Gujarati",
+            "pa": "Punjabi",
+            "te": "Telugu",
+            "ta": "Tamil",
+            "bn": "Bengali",
+            "kn": "Kannada",
+            "bho": "Bhojpuri"
+        }
+        
+        return LanguageDetectionResponse(
+            language=result["language"],
+            confidence=result["confidence"],
+            detected_language_name=language_names.get(result["language"], result["language"])
+        )
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, 
+            detail=f"Error detecting language: {str(e)}"
+        )
+
+@app.post("/api/v1/intent/classify", response_model=IntentClassificationResponse)
+async def classify_intent(request: IntentClassificationRequest):
+    """
+    Classify the intent of user's input text.
+    
+    Supported intents:
+    - symptom_reporting: User describing symptoms
+    - emergency: Urgent medical situation
+    - question: General health question
+    - appointment: Appointment related
+    - medication: Medication queries
+    - follow_up: Follow-up on previous condition
+    - general_chat: Casual conversation
+    
+    Returns intent classification with confidence scores.
+    """
+    try:
+        if intent_classifier is None:
+            raise HTTPException(
+                status_code=503,
+                detail="Intent classification service is not available"
+            )
+        
+        result = intent_classifier.classify(request.text, top_k=request.top_k or 3)
+        
+        # Convert all_predictions to Pydantic models
+        all_preds = [
+            IntentPrediction(intent=pred["intent"], confidence=pred["confidence"])
+            for pred in result.get("all_predictions", [])
+        ]
+        
+        return IntentClassificationResponse(
+            intent=result["intent"],
+            confidence=result["confidence"],
+            all_predictions=all_preds
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error classifying intent: {str(e)}"
+        )
 
 @app.post("/api/v1/symptom/translate")
 async def translate_text(text: str, source_lang: str, target_lang: str = "en"):

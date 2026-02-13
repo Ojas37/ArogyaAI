@@ -51,4 +51,43 @@ class ApiService {
       throw Exception('Network error: $e');
     }
   }
+
+  Future<Map<String, dynamic>> detectLanguage(String text) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/language/detect'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'text': text}),
+      ).timeout(const Duration(seconds: 5));
+
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      } else {
+        throw Exception('Failed to detect language: ${response.statusCode}');
+      }
+    } catch (e) {
+      throw Exception('Network error: $e');
+    }
+  }
+
+  Future<Map<String, dynamic>> classifyIntent(String text, {int topK = 3}) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/intent/classify'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'text': text,
+          'top_k': topK,
+        }),
+      ).timeout(const Duration(seconds: 10));
+
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      } else {
+        throw Exception('Failed to classify intent: ${response.statusCode}');
+      }
+    } catch (e) {
+      throw Exception('Network error: $e');
+    }
+  }
 }

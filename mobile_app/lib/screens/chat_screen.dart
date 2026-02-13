@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:permission_handler/permission_handler.dart';
 import '../providers/triage_provider.dart';
 import '../providers/language_provider.dart';
 import '../services/speech_service.dart';
+import '../services/api_service.dart';
 import '../models/symptom_report.dart';
+import '../models/chat_message.dart';
 import 'result_screen.dart';
 import 'vitals_screen.dart';
 
@@ -17,9 +20,12 @@ class ChatScreen extends StatefulWidget {
 class _ChatScreenState extends State<ChatScreen> {
   final TextEditingController _textController = TextEditingController();
   final SpeechService _speechService = SpeechService();
+  final ApiService _apiService = ApiService();
   final List<ChatMessage> _messages = [];
   bool _isListening = false;
+  bool _isDetectingLanguage = false;
   String _lastLanguage = 'en';
+  bool _hasRequestedLocation = false;
 
   @override
   void initState() {
@@ -41,6 +47,47 @@ class _ChatScreenState extends State<ChatScreen> {
         _messages.clear();
       });
       _addWelcomeMessage();
+      
+      // Request location permission after language is set
+      if (!_hasRequestedLocation) {
+        _hasRequestedLocation = true;
+        Future.delayed(const Duration(milliseconds: 500), () {
+          _requestLocationPermission();
+        });
+      }
+    }
+  }
+
+  Future<void> _requestLocationPermission() async {
+    final status = await Permission.location.request();
+    
+    if (!mounted) return;
+    
+    if (status.isDenied || status.isPermanentlyDenied) {
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => AlertDialog(
+          title: const Text('Location Required'),
+          content: const Text(
+            'Location access is required to find nearby doctors and provide personalized healthcare services. Please enable location permission in your device settings.'
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('OK'),
+            ),
+            if (status.isPermanentlyDenied)
+              ElevatedButton(
+                onPressed: () {
+                  Navigator.pop(context);
+                  openAppSettings();
+                },
+                child: const Text('Open Settings'),
+              ),
+          ],
+        ),
+      );
     }
   }
 
@@ -107,6 +154,27 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
+  String _getTitle(String language) {
+    switch (language) {
+      case 'hi':
+        return 'स्वास्थ्य सहायक';
+      case 'te':
+        return 'ఆరోగ్య సహాయకుడు';
+      case 'ta':
+        return 'சுகாதார உதவியாளர்';
+      case 'bn':
+        return 'স্বাস্থ্য সহায়ক';
+      case 'mr':
+        return 'आरोग्य सहाय्यक';
+      case 'kn':
+        return 'ಆರೋಗ್ಯ ಸಹಾಯಕ';
+      case 'gu':
+        return 'આરોગ્ય સહાયક';
+      default:
+        return 'Health Assistant';
+    }
+  }
+
   Future<void> _handleVoiceInput() async {
     final languageProvider = Provider.of<LanguageProvider>(context, listen: false);
     
@@ -126,7 +194,72 @@ class _ChatScreenState extends State<ChatScreen> {
     } finally {
       setState(() {
         _isListening = false;
-      });
+   
+
+  Future<void> _handleAutoDetect() async {
+    final text = _textController.text.trim();
+    if (text.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter some text first')),
+      );
+      return;
+    }
+
+    setState(() {
+      _isDetectingLanguage = true;
+    });
+
+    try {
+      final result = await _apiService.detectLanguage(text);
+      final detectedLang = result['language'] as String;
+      final detectedName = result['detected_language_name'] as String? ?? detectedLang;
+      final confidence = result['confidence'] as double;
+
+      if (mounted) {
+        // Show detection result
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Language Detected'),
+            content: Text(
+              'Detected: $detectedName ($detectedLang)\n'
+              'Confidence: ${(confidence * 100).toStringAsFixed(0)}%\n\n'
+              'Would you like to switch to this language?',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancel'),
+              ),
+              ElevatedButton(
+                onPressed: () {
+                  final languageProvider = Provider.of<LanguageProvider>(context, listen: false);
+                  languageProvider.setLanguage(detectedLang);
+                  Navigator.pop(context);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Switched to $detectedName')),
+                  );
+                },
+                child: const Text('Switch'),
+              ),
+            ],
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error detecting language: ${e.toString()}')),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isDetectingLanguage = false;
+        });
+      }
+    }
+  }   });
     }
   }
 
@@ -175,123 +308,207 @@ class _ChatScreenState extends State<ChatScreen> {
     // Store report temporarily in provider
     await triageProvider.analyzeSymptoms(report);
 
-    // Ask if user wants to add vitals for better accuracy
-    if (mounted) {
-      final addVitals = await showDialog<bool>(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: const Text('Add Vitals?'),
-          content: const Text(
-            'Would you like to add vital signs (SpO2, Temperature, Heart Rate) for a more accurate assessment?',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('Skip'),
-            ),
-            ElevatedButton(
-              onPressed: () => Navigator.pop(context, true),
-              child: const Text('Add Vitals'),
-            ),
-          ],
-        ),
-      );
+    // Add AI response
+    setState(() {
+      _messages.add(ChatMessage(
+        text: 'I\'ve recorded your symptoms. You can continue chatting or check the results using the Symptom Check button below.',
+        isUser: false,
+        timestamp: DateTime.now(),
+      ));
+    });
+  }
 
-      if (addVitals == true) {
-        // Navigate to vitals screen with special flag
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => const VitalsScreen(fromSymptomCheck: true),
+  Widget _buildDrawer(LanguageProvider languageProvider) {
+    return Drawer(
+      child: ListView(
+        padding: EdgeInsets.zero,
+        children: [
+          DrawerHeader(
+            decoration: BoxDecoration(
+              color: Colors.green[700],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                const Icon(
+                  Icons.health_and_safety,
+                  color: Colors.white,
+                  size: 48,
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'ArogyaAI Health',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
           ),
-        );
-      } else {
-        // Go directly to results (symptoms only)
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => const ResultScreen(),
+          ListTile(
+            leading: const Icon(Icons.chat, color: Colors.green),
+            title: const Text('Chatbot'),
+            onTap: () {
+              Navigator.pop(context); // Close drawer
+              // Already on chat screen
+            },
           ),
-        );
-      }
-    }
+          ListTile(
+            leading: const Icon(Icons.account_balance, color: Colors.green),
+            title: const Text('Government Schemes'),
+            onTap: () {
+              Navigator.pop(context);
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Government Schemes feature coming soon!'),
+                  duration: Duration(seconds: 2),
+                ),
+              );
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.phone, color: Colors.green),
+            title: const Text('Call Nearest Doctor'),
+            onTap: () async {
+              Navigator.pop(context);
+              final status = await Permission.location.status;
+              if (status.isGranted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Finding nearest doctors...'),
+                    duration: Duration(seconds: 2),
+                  ),
+                );
+              } else {
+                _requestLocationPermission();
+              }
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.favorite, color: Colors.green),
+            title: const Text('Vitals'),
+            onTap: () {
+              Navigator.pop(context);
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const VitalsScreen()),
+              );
+            },
+          ),
+          const Divider(),
+          ListTile(
+            leading: const Icon(Icons.info_outline, color: Colors.grey),
+            title: const Text('About'),
+            onTap: () {
+              Navigator.pop(context);
+              showAboutDialog(
+                context: context,
+                applicationName: 'ArogyaAI Health',
+                applicationVersion: '1.0.0',
+                applicationIcon: const Icon(Icons.health_and_safety, size: 48, color: Colors.green),
+                children: [
+                  const Text('AI-powered rural healthcare assistant with multilingual symptom checker.'),
+                ],
+              );
+            },
+          ),
+        ],
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     final languageProvider = Provider.of<LanguageProvider>(context);
     
-    return Column(
-      children: [
-        // Chat messages
-        Expanded(
-          child: ListView.builder(
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(_getTitle(languageProvider.currentLanguage)),
+        backgroundColor: Colors.green[700],
+        foregroundColor: Colors.white,
+        leading: Builder(
+          builder: (context) => IconButton(
+            icon: const Icon(Icons.menu),
+            onPressed: () => Scaffold.of(context).openDrawer(),
+          ),
+        ),
+      ),
+      drawer: _buildDrawer(languageProvider),
+      body: Column(
+        children: [
+          // Chat messages
+          Expanded(
+            child: ListView.builder(
+              padding: const EdgeInsets.all(16),
+              itemCount: _messages.length,
+              itemBuilder: (context, index) {
+                return _buildMessage(_messages[index]);
+              },
+            ),
+          ),
+          
+          // Input area
+          Container(
             padding: const EdgeInsets.all(16),
-            itemCount: _messages.length,
-            itemBuilder: (context, index) {
-              return _buildMessage(_messages[index]);
-            },
-          ),
-        ),
-        
-        // Input area
-        Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            boxShadow: [
-              BoxShadow(
-                color: Colors.grey.shade300,
-                blurRadius: 10,
-                offset: const Offset(0, -2),
-              ),
-            ],
-          ),
-          child: Row(
-            children: [
-              // Voice input button
-              IconButton(
-                icon: Icon(
-                  _isListening ? Icons.mic : Icons.mic_none,
-                  color: _isListening ? Colors.red : Colors.blue,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.grey.shade300,
+                  blurRadius: 10,
+                  offset: const Offset(0, -2),
                 ),
-                onPressed: _handleVoiceInput,
-                iconSize: 32,
-              ),
-              const SizedBox(width: 8),
-              
-              // Text input
-              Expanded(
-                child: TextField(
-                  controller: _textController,
-                  decoration: InputDecoration(
-                    hintText: _getHintText(languageProvider.currentLanguage),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(25),
-                    ),
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 20,
-                      vertical: 10,
-                    ),
+              ],
+            ),
+            child: Row(
+              children: [
+                // Voice input button
+                IconButton(
+                  icon: Icon(
+                    _isListening ? Icons.mic : Icons.mic_none,
+                    color: _isListening ? Colors.red : Colors.blue,
                   ),
-                  maxLines: null,
-                  textInputAction: TextInputAction.send,
-                  onSubmitted: (_) => _handleSubmit(),
+                  onPressed: _handleVoiceInput,
+                  iconSize: 32,
                 ),
-              ),
-              const SizedBox(width: 8),
-              
-              // Send button
-              IconButton(
-                icon: const Icon(Icons.send),
-                onPressed: _handleSubmit,
-                iconSize: 32,
-                color: Colors.blue,
-              ),
-            ],
+                const SizedBox(width: 8),
+                
+                // Text input
+                Expanded(
+                  child: TextField(
+                    controller: _textController,
+                    decoration: InputDecoration(
+                      hintText: _getHintText(languageProvider.currentLanguage),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(25),
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 20,
+                        vertical: 10,
+                      ),
+                    ),
+                    maxLines: null,
+                    textInputAction: TextInputAction.send,
+                    onSubmitted: (_) => _handleSubmit(),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                
+                // Send button
+                IconButton(
+                  icon: const Icon(Icons.send),
+                  onPressed: _handleSubmit,
+                  iconSize: 32,
+                  color: Colors.blue,
+                ),
+              ],
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
@@ -332,16 +549,3 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 }
 
-class ChatMessage {
-  final String text;
-  final bool isUser;
-  final DateTime timestamp;
-  final bool isLoading;
-
-  ChatMessage({
-    required this.text,
-    required this.isUser,
-    required this.timestamp,
-    this.isLoading = false,
-  });
-}

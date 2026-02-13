@@ -11,6 +11,12 @@ scikit-learn==1.4.0
 shap==0.44.0
 numpy==1.26.0
 pandas==2.1.0
+langdetect==1.0.9
+
+# Transformers for Intent Classification
+transformers==4.36.0
+torch==2.1.0
+accelerate==0.25.0
 
 # Translation
 deep-translator==1.11.4

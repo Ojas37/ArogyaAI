@@ -1,22 +1,14 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
-import '../providers/triage_provider.dart';
-import 'result_screen.dart';
+import 'blood_sugar_check_screen.dart';
 
 class VitalsScreen extends StatefulWidget {
-  final bool fromSymptomCheck;
-  
-  const VitalsScreen({super.key, this.fromSymptomCheck = false});
+  const VitalsScreen({super.key});
 
   @override
   State<VitalsScreen> createState() => _VitalsScreenState();
 }
 
 class _VitalsScreenState extends State<VitalsScreen> {
-  double? _spo2;
-  double? _temperature;
-  double? _heartRate;
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -85,16 +77,37 @@ class _VitalsScreenState extends State<VitalsScreen> {
                 ),
                 const SizedBox(height: 24),
 
-                // IoT device connection
+                // Health Check Options Header
+                Row(
+                  children: [
+                    Container(
+                      height: 2,
+                      width: 40,
+                      color: Colors.blue,
+                    ),
+                    const SizedBox(width: 12),
+                    const Text(
+                      'Health Check Options',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.black87,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 20),
+
+                // Blood Sugar Check
                 Container(
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
-                      colors: [Colors.blue.shade400, Colors.blue.shade600],
+                      colors: [Colors.red.shade400, Colors.red.shade600],
                     ),
                     borderRadius: BorderRadius.circular(16),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.blue.withOpacity(0.3),
+                        color: Colors.red.withOpacity(0.3),
                         blurRadius: 8,
                         offset: const Offset(0, 4),
                       ),
@@ -105,10 +118,10 @@ class _VitalsScreenState extends State<VitalsScreen> {
                     child: InkWell(
                       borderRadius: BorderRadius.circular(16),
                       onTap: () {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('IoT integration coming soon!'),
-                            backgroundColor: Colors.blue,
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const BloodSugarCheckScreen(),
                           ),
                         );
                       },
@@ -123,7 +136,7 @@ class _VitalsScreenState extends State<VitalsScreen> {
                                 borderRadius: BorderRadius.circular(12),
                               ),
                               child: const Icon(
-                                Icons.bluetooth,
+                                Icons.bloodtype,
                                 color: Colors.white,
                                 size: 28,
                               ),
@@ -134,7 +147,7 @@ class _VitalsScreenState extends State<VitalsScreen> {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    'Connect Bluetooth Device',
+                                    'Blood Sugar Check',
                                     style: TextStyle(
                                       color: Colors.white,
                                       fontSize: 16,
@@ -143,7 +156,7 @@ class _VitalsScreenState extends State<VitalsScreen> {
                                   ),
                                   SizedBox(height: 4),
                                   Text(
-                                    'Scan for nearby devices',
+                                    'Find nearby medical facilities',
                                     style: TextStyle(
                                       color: Colors.white70,
                                       fontSize: 13,
@@ -164,156 +177,85 @@ class _VitalsScreenState extends State<VitalsScreen> {
                   ),
                 ),
 
-                const SizedBox(height: 32),
-
-                // Manual Entry Section
-                Row(
-                  children: [
-                    Container(
-                      height: 2,
-                      width: 40,
-                      color: Colors.blue,
-                    ),
-                    const SizedBox(width: 12),
-                    const Text(
-                      'Manual Entry',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.black87,
-                      ),
-                    ),
-                  ],
-                ),
                 const SizedBox(height: 20),
 
-                // SpO2
-                _buildVitalInput(
-                  label: 'SpO₂',
-                  subtitle: 'Oxygen Saturation',
-                  value: _spo2,
-                  unit: '%',
+                // Blood Pressure Check
+                _buildHealthCheckButton(
+                  title: 'Blood Pressure Check',
+                  subtitle: 'Monitor BP & find facilities',
+                  icon: Icons.favorite_border,
+                  gradientColors: [Colors.pink.shade400, Colors.pink.shade600],
+                  onTap: () {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Coming soon!')),
+                    );
+                  },
+                ),
+
+                const SizedBox(height: 16),
+
+                // Oxygen Level Check
+                _buildHealthCheckButton(
+                  title: 'Oxygen Level (SpO₂) Check',
+                  subtitle: 'Monitor oxygen saturation',
                   icon: Icons.air,
-                  iconColor: Colors.cyan,
-                  normalRange: '95-100%',
-                  onChanged: (value) {
-                    setState(() {
-                      _spo2 = double.tryParse(value);
-                    });
+                  gradientColors: [Colors.cyan.shade400, Colors.cyan.shade600],
+                  onTap: () {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Coming soon!')),
+                    );
                   },
                 ),
 
                 const SizedBox(height: 16),
 
-                // Temperature
-                _buildVitalInput(
-                  label: 'Temperature',
-                  subtitle: 'Body Temperature',
-                  value: _temperature,
-                  unit: '°F',
+                // Body Temperature Check
+                _buildHealthCheckButton(
+                  title: 'Body Temperature Check',
+                  subtitle: 'Monitor fever & infections',
                   icon: Icons.thermostat,
-                  iconColor: Colors.orange,
-                  normalRange: '97-99°F',
-                  onChanged: (value) {
-                    setState(() {
-                      _temperature = double.tryParse(value);
-                    });
+                  gradientColors: [
+                    Colors.orange.shade400,
+                    Colors.orange.shade600
+                  ],
+                  onTap: () {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Coming soon!')),
+                    );
                   },
                 ),
 
                 const SizedBox(height: 16),
 
-                // Heart Rate
-                _buildVitalInput(
-                  label: 'Heart Rate',
-                  subtitle: 'Beats per Minute',
-                  value: _heartRate,
-                  unit: 'bpm',
-                  icon: Icons.favorite,
-                  iconColor: Colors.red,
-                  normalRange: '60-100 bpm',
-                  onChanged: (value) {
-                    setState(() {
-                      _heartRate = double.tryParse(value);
-                    });
+                // Heart Rate Check
+                _buildHealthCheckButton(
+                  title: 'Heart Rate (Pulse) Check',
+                  subtitle: 'Monitor heart rhythm',
+                  icon: Icons.monitor_heart,
+                  gradientColors: [
+                    Colors.purple.shade400,
+                    Colors.purple.shade600
+                  ],
+                  onTap: () {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Coming soon!')),
+                    );
                   },
                 ),
 
-                const SizedBox(height: 32),
+                const SizedBox(height: 16),
 
-                // Save button
-                Container(
-                  width: double.infinity,
-                  height: 56,
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: _spo2 != null || _temperature != null || _heartRate != null
-                          ? [Colors.green.shade400, Colors.green.shade600]
-                          : [Colors.grey.shade300, Colors.grey.shade400],
-                    ),
-                    borderRadius: BorderRadius.circular(16),
-                    boxShadow: _spo2 != null || _temperature != null || _heartRate != null
-                        ? [
-                            BoxShadow(
-                              color: Colors.green.withOpacity(0.3),
-                              blurRadius: 8,
-                              offset: const Offset(0, 4),
-                            ),
-                          ]
-                        : [],
-                  ),
-                  child: ElevatedButton.icon(
-                    onPressed: _spo2 != null || _temperature != null || _heartRate != null
-                        ? () async {
-                            final triageProvider = Provider.of<TriageProvider>(context, listen: false);
-                            
-                            if (triageProvider.currentResult != null) {
-                              await triageProvider.addVitals(_spo2, _temperature, _heartRate);
-                            }
-                            
-                            if (mounted) {
-                              if (widget.fromSymptomCheck) {
-                                Navigator.pushReplacement(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (context) => const ResultScreen(),
-                                  ),
-                                );
-                              } else {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: const Text('Vitals saved successfully!'),
-                                    backgroundColor: Colors.green,
-                                    behavior: SnackBarBehavior.floating,
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(10),
-                                    ),
-                                  ),
-                                );
-                              }
-                            }
-                          }
-                        : null,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.transparent,
-                      shadowColor: Colors.transparent,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                    ),
-                    icon: Icon(
-                      widget.fromSymptomCheck ? Icons.arrow_forward : Icons.save,
-                      color: Colors.white,
-                    ),
-                    label: Text(
-                      widget.fromSymptomCheck ? 'Continue to Results' : 'Save Vitals',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
+                // Cholesterol Check
+                _buildHealthCheckButton(
+                  title: 'Cholesterol Check',
+                  subtitle: 'Monitor lipid levels',
+                  icon: Icons.science,
+                  gradientColors: [Colors.teal.shade400, Colors.teal.shade600],
+                  onTap: () {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Coming soon!')),
+                    );
+                  },
                 ),
                 const SizedBox(height: 20),
               ],
@@ -324,128 +266,71 @@ class _VitalsScreenState extends State<VitalsScreen> {
     );
   }
 
-  Widget _buildVitalInput({
-    required String label,
+  Widget _buildHealthCheckButton({
+    required String title,
     required String subtitle,
-    required double? value,
-    required String unit,
     required IconData icon,
-    required Color iconColor,
-    required String normalRange,
-    required Function(String) onChanged,
+    required List<Color> gradientColors,
+    required VoidCallback onTap,
   }) {
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
+        gradient: LinearGradient(colors: gradientColors),
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 10,
+            color: gradientColors[0].withOpacity(0.3),
+            blurRadius: 8,
             offset: const Offset(0, 4),
           ),
         ],
       ),
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Row(
               children: [
                 Container(
-                  padding: const EdgeInsets.all(10),
+                  padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: iconColor.withOpacity(0.1),
+                    color: Colors.white.withOpacity(0.2),
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  child: Icon(
-                    icon,
-                    color: iconColor,
-                    size: 24,
-                  ),
+                  child: Icon(icon, color: Colors.white, size: 28),
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: 16),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        label,
+                        title,
                         style: const TextStyle(
-                          fontSize: 18,
+                          color: Colors.white,
+                          fontSize: 16,
                           fontWeight: FontWeight.bold,
-                          color: Colors.black87,
                         ),
                       ),
+                      const SizedBox(height: 4),
                       Text(
                         subtitle,
-                        style: TextStyle(
+                        style: const TextStyle(
+                          color: Colors.white70,
                           fontSize: 13,
-                          color: Colors.grey.shade600,
                         ),
                       ),
                     ],
                   ),
                 ),
+                const Icon(Icons.arrow_forward_ios,
+                    color: Colors.white, size: 20),
               ],
             ),
-            const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              decoration: BoxDecoration(
-                color: Colors.green.shade50,
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.green.shade200),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.check_circle, size: 14, color: Colors.green.shade700),
-                  const SizedBox(width: 6),
-                  Text(
-                    'Normal: $normalRange',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.green.shade700,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              keyboardType: TextInputType.number,
-              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
-              decoration: InputDecoration(
-                suffixText: unit,
-                suffixStyle: TextStyle(
-                  color: Colors.grey.shade600,
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                ),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: Colors.grey.shade300),
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: Colors.grey.shade300),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: iconColor, width: 2),
-                ),
-                hintText: 'Enter value',
-                hintStyle: TextStyle(color: Colors.grey.shade400),
-                filled: true,
-                fillColor: Colors.grey.shade50,
-                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-              ),
-              onChanged: onChanged,
-            ),
-          ],
+          ),
         ),
       ),
     );
