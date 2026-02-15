@@ -5,7 +5,7 @@ import '../models/medical_facility.dart';
 import '../services/geocoding_service.dart';
 
 class NearestMedicalFacilityScreen extends StatefulWidget {
-  const NearestMedicalFacilityScreen({Key? key}) : super(key: key);
+  const NearestMedicalFacilityScreen({super.key});
 
   @override
   State<NearestMedicalFacilityScreen> createState() =>
@@ -299,7 +299,7 @@ class _NearestMedicalFacilityScreenState
               Column(
                 children: [
                   DropdownButtonFormField<String>(
-                    value: _locationType,
+                    initialValue: _locationType,
                     decoration: const InputDecoration(
                       labelText: 'Search By',
                       border: OutlineInputBorder(),
@@ -451,7 +451,7 @@ class _NearestMedicalFacilityScreenState
                         children: [
                           Row(
                             children: [
-                              Icon(Icons.local_hospital,
+                              const Icon(Icons.local_hospital,
                                   color: Colors.teal, size: 32),
                               const SizedBox(width: 12),
                               Expanded(

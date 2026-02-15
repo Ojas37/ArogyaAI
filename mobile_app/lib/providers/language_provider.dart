@@ -1,13 +1,34 @@
 import 'package:flutter/material.dart';
+import '../services/translation_service.dart';
 
 class LanguageProvider with ChangeNotifier {
   String _currentLanguage = 'en';
+  final TranslationService _translationService = TranslationService();
+  bool _isLoading = false;
 
   String get currentLanguage => _currentLanguage;
+  bool get isLoading => _isLoading;
 
-  void setLanguage(String languageCode) {
-    _currentLanguage = languageCode;
+  Future<void> setLanguage(String languageCode) async {
+    if (_currentLanguage == languageCode) return;
+
+    _isLoading = true;
     notifyListeners();
+
+    await _translationService.load(languageCode);
+    _currentLanguage = languageCode;
+
+    _isLoading = false;
+    notifyListeners();
+  }
+
+  String translate(String key, {Map<String, String>? params}) {
+    return _translationService.translate(key, params: params);
+  }
+
+  // Short alias for translate
+  String t(String key, {Map<String, String>? params}) {
+    return translate(key, params: params);
   }
 
   String getLanguageName() {

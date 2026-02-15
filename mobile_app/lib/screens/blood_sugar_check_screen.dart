@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:provider/provider.dart';
+import '../providers/language_provider.dart';
 import '../models/blood_sugar_reading.dart';
 import '../services/blood_sugar_classifier.dart';
 import '../services/location_service.dart';
@@ -34,41 +36,64 @@ class _BloodSugarCheckScreenState extends State<BloodSugarCheckScreen> {
     super.dispose();
   }
 
-  String _getHintText() {
+  String _locationTypeLabel(LanguageProvider languageProvider) {
     switch (_locationType) {
       case 'City':
-        return 'e.g., Satara, Mumbai, Pune';
+        return languageProvider.t('location.city');
       case 'Village':
-        return 'e.g., Karad, Wai, Panchgani';
+        return languageProvider.t('location.village');
       case 'Pin Code':
-        return 'e.g., 415002, 411001';
+        return languageProvider.t('location.pinCode');
       case 'Taluka':
-        return 'e.g., Satara, Karad, Phaltan';
+        return languageProvider.t('location.taluka');
       default:
-        return 'Enter location';
+        return languageProvider.t('location.enterLocation');
     }
   }
 
-  String _getLocationTip() {
+  String _getHintText(LanguageProvider languageProvider) {
     switch (_locationType) {
       case 'City':
-        return 'Tip: Enter your city name like "Satara", "Mumbai", etc.';
+        return languageProvider.t('bloodSugar.hintCity');
       case 'Village':
-        return 'Tip: Enter your village name, you can also add taluka for better results';
+        return languageProvider.t('bloodSugar.hintVillage');
       case 'Pin Code':
-        return 'Tip: Enter 6-digit postal pin code of your area';
+        return languageProvider.t('bloodSugar.hintPinCode');
       case 'Taluka':
-        return 'Tip: Enter taluka/tehsil name like "Satara", "Karad", etc.';
+        return languageProvider.t('bloodSugar.hintTaluka');
+      default:
+        return languageProvider.t('location.enterLocation');
+    }
+  }
+
+  String _getLocationTip(LanguageProvider languageProvider) {
+    switch (_locationType) {
+      case 'City':
+        return languageProvider.t('bloodSugar.tipCity');
+      case 'Village':
+        return languageProvider.t('bloodSugar.tipVillage');
+      case 'Pin Code':
+        return languageProvider.t('bloodSugar.tipPinCode');
+      case 'Taluka':
+        return languageProvider.t('bloodSugar.tipTaluka');
       default:
         return '';
     }
   }
 
   Future<void> _searchPlace() async {
+    final languageProvider =
+        Provider.of<LanguageProvider>(context, listen: false);
+
     if (_placeController.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Please enter a $_locationType'),
+          content: Text(
+            languageProvider.t(
+              'bloodSugar.enterLocationType',
+              params: {'type': _locationTypeLabel(languageProvider)},
+            ),
+          ),
           backgroundColor: Colors.orange,
         ),
       );
@@ -97,15 +122,20 @@ class _BloodSugarCheckScreenState extends State<BloodSugarCheckScreen> {
 
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Found: ${result['displayName']}'),
+            content: Text(
+              languageProvider.t(
+                'bloodSugar.locationFound',
+                params: {'name': result['displayName']},
+              ),
+            ),
             backgroundColor: Colors.green,
             duration: const Duration(seconds: 3),
           ),
         );
       } else if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Location not found. Try a different name.'),
+          SnackBar(
+            content: Text(languageProvider.t('bloodSugar.locationNotFound')),
             backgroundColor: Colors.red,
           ),
         );
@@ -114,7 +144,12 @@ class _BloodSugarCheckScreenState extends State<BloodSugarCheckScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error: $e'),
+            content: Text(
+              languageProvider.t(
+                'bloodSugar.errorMessage',
+                params: {'error': e.toString()},
+              ),
+            ),
             backgroundColor: Colors.red,
           ),
         );
@@ -127,6 +162,8 @@ class _BloodSugarCheckScreenState extends State<BloodSugarCheckScreen> {
   }
 
   Future<void> _getCurrentLocation() async {
+    final languageProvider =
+        Provider.of<LanguageProvider>(context, listen: false);
     setState(() => _isLoading = true);
 
     try {
@@ -156,16 +193,20 @@ class _BloodSugarCheckScreenState extends State<BloodSugarCheckScreen> {
         });
 
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Location acquired successfully!'),
+          SnackBar(
+            content:
+                Text(languageProvider.t('bloodSugar.locationAcquiredSuccess')),
             backgroundColor: Colors.green,
-            duration: Duration(seconds: 2),
+            duration: const Duration(seconds: 2),
           ),
         );
       }
     } catch (e) {
       if (mounted) {
-        String errorMessage = 'Could not get location: $e';
+        String errorMessage = languageProvider.t(
+          'bloodSugar.locationError',
+          params: {'error': e.toString()},
+        );
 
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -183,28 +224,30 @@ class _BloodSugarCheckScreenState extends State<BloodSugarCheckScreen> {
   }
 
   Future<bool> _showLocationServiceDialog() async {
+    final languageProvider =
+        Provider.of<LanguageProvider>(context, listen: false);
     return await showDialog<bool>(
           context: context,
           builder: (context) => AlertDialog(
-            title: const Row(
+            title: Row(
               children: [
-                Icon(Icons.location_off, color: Colors.orange),
-                SizedBox(width: 8),
-                Text('Location Services Disabled'),
+                const Icon(Icons.location_off, color: Colors.orange),
+                const SizedBox(width: 8),
+                Text(languageProvider.t('bloodSugar.locationServicesDisabled')),
               ],
             ),
-            content: const Text(
-              'Location services are turned off. Please enable them to find nearby medical facilities.',
+            content: Text(
+              languageProvider.t('bloodSugar.locationServicesOff'),
             ),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(context, false),
-                child: const Text('Cancel'),
+                child: Text(languageProvider.t('common.cancel')),
               ),
               ElevatedButton(
                 onPressed: () => Navigator.pop(context, true),
                 style: ElevatedButton.styleFrom(backgroundColor: Colors.teal),
-                child: const Text('Open Settings'),
+                child: Text(languageProvider.t('errors.openSettings')),
               ),
             ],
           ),
@@ -213,23 +256,25 @@ class _BloodSugarCheckScreenState extends State<BloodSugarCheckScreen> {
   }
 
   Future<void> _showPermissionDialog() async {
+    final languageProvider =
+        Provider.of<LanguageProvider>(context, listen: false);
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Row(
+        title: Row(
           children: [
-            Icon(Icons.error, color: Colors.red),
-            SizedBox(width: 8),
-            Text('Permission Required'),
+            const Icon(Icons.error, color: Colors.red),
+            const SizedBox(width: 8),
+            Text(languageProvider.t('errors.locationRequired')),
           ],
         ),
-        content: const Text(
-          'Location permission is required to find nearby medical facilities. Please grant permission in app settings.',
+        content: Text(
+          languageProvider.t('errors.locationMessage'),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
+            child: Text(languageProvider.t('common.cancel')),
           ),
           ElevatedButton(
             onPressed: () {
@@ -237,7 +282,7 @@ class _BloodSugarCheckScreenState extends State<BloodSugarCheckScreen> {
               LocationService.openAppSettings();
             },
             style: ElevatedButton.styleFrom(backgroundColor: Colors.teal),
-            child: const Text('Open Settings'),
+            child: Text(languageProvider.t('errors.openSettings')),
           ),
         ],
       ),
@@ -263,8 +308,11 @@ class _BloodSugarCheckScreenState extends State<BloodSugarCheckScreen> {
       if (latitude == null || longitude == null) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Please get your location first'),
+            SnackBar(
+              content: Text(
+                Provider.of<LanguageProvider>(context, listen: false)
+                    .t('bloodSugar.locationFirst'),
+              ),
               backgroundColor: Colors.orange,
             ),
           );
@@ -295,7 +343,14 @@ class _BloodSugarCheckScreenState extends State<BloodSugarCheckScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
+          SnackBar(
+            content: Text(
+              Provider.of<LanguageProvider>(context, listen: false).t(
+                'bloodSugar.errorMessage',
+                params: {'error': e.toString()},
+              ),
+            ),
+          ),
         );
       }
     } finally {
@@ -307,9 +362,11 @@ class _BloodSugarCheckScreenState extends State<BloodSugarCheckScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final languageProvider = Provider.of<LanguageProvider>(context);
+
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Blood Sugar Check'),
+        title: Text(languageProvider.t('bloodSugar.title')),
         backgroundColor: Colors.teal,
       ),
       body: SingleChildScrollView(
@@ -326,15 +383,15 @@ class _BloodSugarCheckScreenState extends State<BloodSugarCheckScreen> {
                 color: Colors.red,
               ),
               const SizedBox(height: 16),
-              const Text(
-                'Check Your Blood Sugar',
-                style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+              Text(
+                languageProvider.t('bloodSugar.header'),
+                style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 8),
-              const Text(
-                'Enter your current blood sugar reading and any symptoms you\'re experiencing',
-                style: TextStyle(color: Colors.grey),
+              Text(
+                languageProvider.t('bloodSugar.description'),
+                style: const TextStyle(color: Colors.grey),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 32),
@@ -343,19 +400,19 @@ class _BloodSugarCheckScreenState extends State<BloodSugarCheckScreen> {
               TextFormField(
                 controller: _sugarController,
                 keyboardType: TextInputType.number,
-                decoration: const InputDecoration(
-                  labelText: 'Blood Sugar (mg/dL)',
-                  hintText: 'Enter value, e.g., 120',
-                  border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.medical_information),
+                decoration: InputDecoration(
+                  labelText: languageProvider.t('bloodSugar.label'),
+                  hintText: languageProvider.t('bloodSugar.hintValue'),
+                  border: const OutlineInputBorder(),
+                  prefixIcon: const Icon(Icons.medical_information),
                 ),
                 validator: (value) {
                   if (value == null || value.isEmpty) {
-                    return 'Please enter your blood sugar reading';
+                    return languageProvider.t('bloodSugar.required');
                   }
                   final num? sugar = double.tryParse(value);
                   if (sugar == null || sugar <= 0 || sugar > 1000) {
-                    return 'Please enter a valid value (1-1000 mg/dL)';
+                    return languageProvider.t('bloodSugar.invalid');
                   }
                   return null;
                 },
@@ -363,9 +420,9 @@ class _BloodSugarCheckScreenState extends State<BloodSugarCheckScreen> {
               const SizedBox(height: 24),
 
               // Location section
-              const Text(
-                'Your Location:',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              Text(
+                languageProvider.t('location.yourLocation'),
+                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 12),
 
@@ -379,11 +436,11 @@ class _BloodSugarCheckScreenState extends State<BloodSugarCheckScreen> {
                 child: Column(
                   children: [
                     SwitchListTile(
-                      title: const Text('Enter location manually'),
+                      title: Text(languageProvider.t('location.enterManual')),
                       subtitle: Text(
                         _useManualLocation
-                            ? 'Manual entry mode'
-                            : 'Using GPS location',
+                            ? languageProvider.t('bloodSugar.manualEntryMode')
+                            : languageProvider.t('location.usingGps'),
                         style: const TextStyle(fontSize: 12),
                       ),
                       value: _useManualLocation,
@@ -429,8 +486,17 @@ class _BloodSugarCheckScreenState extends State<BloodSugarCheckScreen> {
                             Expanded(
                               child: Text(
                                 _selectedLatitude != null
-                                    ? 'Location: ${_selectedLatitude!.toStringAsFixed(4)}, ${_selectedLongitude!.toStringAsFixed(4)}'
-                                    : 'Location not acquired',
+                                    ? languageProvider.t(
+                                        'location.coordinates',
+                                        params: {
+                                          'lat': _selectedLatitude!
+                                              .toStringAsFixed(4),
+                                          'lon': _selectedLongitude!
+                                              .toStringAsFixed(4),
+                                        },
+                                      )
+                                    : languageProvider
+                                        .t('location.locationNotAcquired'),
                                 style: const TextStyle(fontSize: 14),
                               ),
                             ),
@@ -449,9 +515,11 @@ class _BloodSugarCheckScreenState extends State<BloodSugarCheckScreen> {
                                   ),
                                 )
                               : const Icon(Icons.my_location),
-                          label: Text(_isLoading
-                              ? 'Getting location...'
-                              : 'Get Current Location'),
+                          label: Text(
+                            _isLoading
+                                ? languageProvider.t('location.gettingLocation')
+                                : languageProvider.t('location.getCurrentLocation'),
+                          ),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: Colors.teal,
                             minimumSize: const Size(double.infinity, 45),
@@ -467,19 +535,28 @@ class _BloodSugarCheckScreenState extends State<BloodSugarCheckScreen> {
                     // Location type dropdown
                     DropdownButtonFormField<String>(
                       initialValue: _locationType,
-                      decoration: const InputDecoration(
-                        labelText: 'Search By',
-                        border: OutlineInputBorder(),
-                        prefixIcon: Icon(Icons.map),
+                      decoration: InputDecoration(
+                        labelText: languageProvider.t('bloodSugar.searchBy'),
+                        border: const OutlineInputBorder(),
+                        prefixIcon: const Icon(Icons.map),
                       ),
-                      items: const [
-                        DropdownMenuItem(value: 'City', child: Text('City')),
+                      items: [
                         DropdownMenuItem(
-                            value: 'Village', child: Text('Village')),
+                          value: 'City',
+                          child: Text(languageProvider.t('location.city')),
+                        ),
                         DropdownMenuItem(
-                            value: 'Pin Code', child: Text('Pin Code')),
+                          value: 'Village',
+                          child: Text(languageProvider.t('location.village')),
+                        ),
                         DropdownMenuItem(
-                            value: 'Taluka', child: Text('Taluka')),
+                          value: 'Pin Code',
+                          child: Text(languageProvider.t('location.pinCode')),
+                        ),
+                        DropdownMenuItem(
+                          value: 'Taluka',
+                          child: Text(languageProvider.t('location.taluka')),
+                        ),
                       ],
                       onChanged: (value) {
                         setState(() {
@@ -499,8 +576,8 @@ class _BloodSugarCheckScreenState extends State<BloodSugarCheckScreen> {
                           ? TextInputType.number
                           : TextInputType.text,
                       decoration: InputDecoration(
-                        labelText: 'Enter $_locationType',
-                        hintText: _getHintText(),
+                        labelText: languageProvider.t('location.enterLocation'),
+                        hintText: _getHintText(languageProvider),
                         border: const OutlineInputBorder(),
                         prefixIcon: const Icon(Icons.search),
                         suffixIcon: _isSearchingPlace
@@ -521,7 +598,7 @@ class _BloodSugarCheckScreenState extends State<BloodSugarCheckScreen> {
                     ElevatedButton.icon(
                       onPressed: _isSearchingPlace ? null : _searchPlace,
                       icon: const Icon(Icons.search),
-                      label: const Text('Search Location'),
+                      label: Text(languageProvider.t('location.searchLocation')),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.teal,
                         minimumSize: const Size(double.infinity, 45),
@@ -555,7 +632,7 @@ class _BloodSugarCheckScreenState extends State<BloodSugarCheckScreen> {
                     ],
                     const SizedBox(height: 8),
                     Text(
-                      _getLocationTip(),
+                      _getLocationTip(languageProvider),
                       style:
                           TextStyle(fontSize: 12, color: Colors.grey.shade600),
                     ),
@@ -564,12 +641,12 @@ class _BloodSugarCheckScreenState extends State<BloodSugarCheckScreen> {
               const SizedBox(height: 24),
 
               // Symptoms section
-              const Text(
-                'Symptoms (select all that apply):',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              Text(
+                languageProvider.t('bloodSugar.symptomsTitle'),
+                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 8),
-              _buildSymptomChips(),
+              _buildSymptomChips(languageProvider),
               const SizedBox(height: 32),
 
               // Submit button
@@ -588,9 +665,9 @@ class _BloodSugarCheckScreenState extends State<BloodSugarCheckScreen> {
                           color: Colors.white,
                         ),
                       )
-                    : const Text(
-                        'Check Now',
-                        style: TextStyle(fontSize: 18),
+                    : Text(
+                        languageProvider.t('vitalsForm.checkNow'),
+                        style: const TextStyle(fontSize: 18),
                       ),
               ),
               const SizedBox(height: 16),
@@ -603,14 +680,14 @@ class _BloodSugarCheckScreenState extends State<BloodSugarCheckScreen> {
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(color: Colors.orange.shade200),
                 ),
-                child: const Row(
+                child: Row(
                   children: [
-                    Icon(Icons.info_outline, color: Colors.orange),
-                    SizedBox(width: 8),
+                    const Icon(Icons.info_outline, color: Colors.orange),
+                    const SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        'This tool provides guidance only and does not replace professional medical care.',
-                        style: TextStyle(fontSize: 12),
+                        languageProvider.t('bloodSugar.disclaimer'),
+                        style: const TextStyle(fontSize: 12),
                       ),
                     ),
                   ],
@@ -623,7 +700,7 @@ class _BloodSugarCheckScreenState extends State<BloodSugarCheckScreen> {
     );
   }
 
-  Widget _buildSymptomChips() {
+  Widget _buildSymptomChips(LanguageProvider languageProvider) {
     final symptoms = [
       BloodSugarSymptom.confusion,
       BloodSugarSymptom.fainting,
@@ -641,7 +718,7 @@ class _BloodSugarCheckScreenState extends State<BloodSugarCheckScreen> {
       runSpacing: 8,
       children: symptoms.map((symptom) {
         final isSelected = _selectedSymptoms.contains(symptom);
-        final label = _getSymptomLabel(symptom);
+        final label = _getSymptomLabel(symptom, languageProvider);
 
         return FilterChip(
           label: Text(label),
@@ -674,28 +751,31 @@ class _BloodSugarCheckScreenState extends State<BloodSugarCheckScreen> {
     );
   }
 
-  String _getSymptomLabel(BloodSugarSymptom symptom) {
+  String _getSymptomLabel(
+    BloodSugarSymptom symptom,
+    LanguageProvider languageProvider,
+  ) {
     switch (symptom) {
       case BloodSugarSymptom.confusion:
-        return 'Confusion';
+        return languageProvider.t('bloodSugar.symptom.confusion');
       case BloodSugarSymptom.fainting:
-        return 'Fainting';
+        return languageProvider.t('bloodSugar.symptom.fainting');
       case BloodSugarSymptom.vomiting:
-        return 'Vomiting';
+        return languageProvider.t('bloodSugar.symptom.vomiting');
       case BloodSugarSymptom.breathingTrouble:
-        return 'Breathing Trouble';
+        return languageProvider.t('bloodSugar.symptom.breathingTrouble');
       case BloodSugarSymptom.unconscious:
-        return 'Unconscious';
+        return languageProvider.t('bloodSugar.symptom.unconscious');
       case BloodSugarSymptom.excessiveThirst:
-        return 'Excessive Thirst';
+        return languageProvider.t('bloodSugar.symptom.excessiveThirst');
       case BloodSugarSymptom.frequentUrination:
-        return 'Frequent Urination';
+        return languageProvider.t('bloodSugar.symptom.frequentUrination');
       case BloodSugarSymptom.fatigue:
-        return 'Fatigue';
+        return languageProvider.t('bloodSugar.symptom.fatigue');
       case BloodSugarSymptom.blurredVision:
-        return 'Blurred Vision';
+        return languageProvider.t('bloodSugar.symptom.blurredVision');
       case BloodSugarSymptom.none:
-        return 'No Symptoms';
+        return languageProvider.t('bloodSugar.symptom.none');
     }
   }
 

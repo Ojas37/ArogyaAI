@@ -6,13 +6,15 @@ import '../services/geocoding_service.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class NearestHospitalClinicsScreen extends StatefulWidget {
-  const NearestHospitalClinicsScreen({Key? key}) : super(key: key);
+  const NearestHospitalClinicsScreen({super.key});
 
   @override
-  State<NearestHospitalClinicsScreen> createState() => _NearestHospitalClinicsScreenState();
+  State<NearestHospitalClinicsScreen> createState() =>
+      _NearestHospitalClinicsScreenState();
 }
 
-class _NearestHospitalClinicsScreenState extends State<NearestHospitalClinicsScreen> {
+class _NearestHospitalClinicsScreenState
+    extends State<NearestHospitalClinicsScreen> {
   bool _isLoading = false;
   bool _isSearchingPlace = false;
   bool _useManualLocation = false;
@@ -115,7 +117,8 @@ class _NearestHospitalClinicsScreenState extends State<NearestHospitalClinicsScr
         );
         return;
       }
-      final position = await LocationService.getCurrentLocationWithTimeout(timeout: const Duration(seconds: 10));
+      final position = await LocationService.getCurrentLocationWithTimeout(
+          timeout: const Duration(seconds: 10));
       if (position != null && mounted) {
         setState(() {
           _selectedLatitude = position.latitude;
@@ -205,7 +208,9 @@ class _NearestHospitalClinicsScreenState extends State<NearestHospitalClinicsScr
                   SwitchListTile(
                     title: const Text('Enter location manually'),
                     subtitle: Text(
-                      _useManualLocation ? 'Manual entry mode' : 'Using GPS location',
+                      _useManualLocation
+                          ? 'Manual entry mode'
+                          : 'Using GPS location',
                       style: const TextStyle(fontSize: 12),
                     ),
                     value: _useManualLocation,
@@ -221,10 +226,14 @@ class _NearestHospitalClinicsScreenState extends State<NearestHospitalClinicsScr
             if (!_useManualLocation)
               Container(
                 decoration: BoxDecoration(
-                  color: _selectedLatitude != null ? Colors.green.shade50 : Colors.orange.shade50,
+                  color: _selectedLatitude != null
+                      ? Colors.green.shade50
+                      : Colors.orange.shade50,
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(
-                    color: _selectedLatitude != null ? Colors.green.shade200 : Colors.orange.shade200,
+                    color: _selectedLatitude != null
+                        ? Colors.green.shade200
+                        : Colors.orange.shade200,
                   ),
                 ),
                 child: Padding(
@@ -234,8 +243,12 @@ class _NearestHospitalClinicsScreenState extends State<NearestHospitalClinicsScr
                       Row(
                         children: [
                           Icon(
-                            _selectedLatitude != null ? Icons.location_on : Icons.location_off,
-                            color: _selectedLatitude != null ? Colors.green : Colors.orange,
+                            _selectedLatitude != null
+                                ? Icons.location_on
+                                : Icons.location_off,
+                            color: _selectedLatitude != null
+                                ? Colors.green
+                                : Colors.orange,
                           ),
                           const SizedBox(width: 8),
                           Expanded(
@@ -255,10 +268,13 @@ class _NearestHospitalClinicsScreenState extends State<NearestHospitalClinicsScr
                             ? const SizedBox(
                                 width: 16,
                                 height: 16,
-                                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                                child: CircularProgressIndicator(
+                                    strokeWidth: 2, color: Colors.white),
                               )
                             : const Icon(Icons.my_location),
-                        label: Text(_isLoading ? 'Getting location...' : 'Get Current Location'),
+                        label: Text(_isLoading
+                            ? 'Getting location...'
+                            : 'Get Current Location'),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: Colors.teal,
                           minimumSize: const Size(double.infinity, 45),
@@ -272,7 +288,7 @@ class _NearestHospitalClinicsScreenState extends State<NearestHospitalClinicsScr
               Column(
                 children: [
                   DropdownButtonFormField<String>(
-                    value: _locationType,
+                    initialValue: _locationType,
                     decoration: const InputDecoration(
                       labelText: 'Search By',
                       border: OutlineInputBorder(),
@@ -280,8 +296,10 @@ class _NearestHospitalClinicsScreenState extends State<NearestHospitalClinicsScr
                     ),
                     items: const [
                       DropdownMenuItem(value: 'City', child: Text('City')),
-                      DropdownMenuItem(value: 'Village', child: Text('Village')),
-                      DropdownMenuItem(value: 'Pin Code', child: Text('Pin Code')),
+                      DropdownMenuItem(
+                          value: 'Village', child: Text('Village')),
+                      DropdownMenuItem(
+                          value: 'Pin Code', child: Text('Pin Code')),
                       DropdownMenuItem(value: 'Taluka', child: Text('Taluka')),
                     ],
                     onChanged: (value) {
@@ -297,7 +315,9 @@ class _NearestHospitalClinicsScreenState extends State<NearestHospitalClinicsScr
                   const SizedBox(height: 12),
                   TextFormField(
                     controller: _placeController,
-                    keyboardType: _locationType == 'Pin Code' ? TextInputType.number : TextInputType.text,
+                    keyboardType: _locationType == 'Pin Code'
+                        ? TextInputType.number
+                        : TextInputType.text,
                     decoration: InputDecoration(
                       labelText: 'Enter $_locationType',
                       hintText: _getHintText(),
@@ -306,7 +326,11 @@ class _NearestHospitalClinicsScreenState extends State<NearestHospitalClinicsScr
                       suffixIcon: _isSearchingPlace
                           ? const Padding(
                               padding: EdgeInsets.all(12),
-                              child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)),
+                              child: SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(
+                                      strokeWidth: 2)),
                             )
                           : null,
                     ),
@@ -333,7 +357,8 @@ class _NearestHospitalClinicsScreenState extends State<NearestHospitalClinicsScr
                       ),
                       child: Row(
                         children: [
-                          const Icon(Icons.check_circle, color: Colors.green, size: 20),
+                          const Icon(Icons.check_circle,
+                              color: Colors.green, size: 20),
                           const SizedBox(width: 8),
                           Expanded(
                             child: Text(
@@ -393,7 +418,8 @@ class _NearestHospitalClinicsScreenState extends State<NearestHospitalClinicsScr
                     Icon(Icons.info_outline, color: Colors.grey),
                     SizedBox(width: 12),
                     Expanded(
-                      child: Text('No facilities found nearby. Try searching manually in Google Maps.'),
+                      child: Text(
+                          'No facilities found nearby. Try searching manually in Google Maps.'),
                     ),
                   ],
                 ),
@@ -414,7 +440,8 @@ class _NearestHospitalClinicsScreenState extends State<NearestHospitalClinicsScr
                         children: [
                           Row(
                             children: [
-                              Icon(Icons.local_hospital, color: Colors.teal, size: 32),
+                              const Icon(Icons.local_hospital,
+                                  color: Colors.teal, size: 32),
                               const SizedBox(width: 12),
                               Expanded(
                                 child: Column(
@@ -422,12 +449,16 @@ class _NearestHospitalClinicsScreenState extends State<NearestHospitalClinicsScr
                                   children: [
                                     Text(
                                       facility.name,
-                                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                                      style: const TextStyle(
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.bold),
                                     ),
                                     if (facility.distanceInKm != null)
                                       Text(
                                         '${facility.distanceInKm!.toStringAsFixed(1)} km away',
-                                        style: TextStyle(color: Colors.grey.shade600, fontSize: 14),
+                                        style: TextStyle(
+                                            color: Colors.grey.shade600,
+                                            fontSize: 14),
                                       ),
                                   ],
                                 ),
@@ -438,12 +469,14 @@ class _NearestHospitalClinicsScreenState extends State<NearestHospitalClinicsScr
                             const SizedBox(height: 8),
                             Row(
                               children: [
-                                const Icon(Icons.location_on, size: 16, color: Colors.grey),
+                                const Icon(Icons.location_on,
+                                    size: 16, color: Colors.grey),
                                 const SizedBox(width: 4),
                                 Expanded(
                                   child: Text(
                                     facility.address!,
-                                    style: const TextStyle(fontSize: 12, color: Colors.grey),
+                                    style: const TextStyle(
+                                        fontSize: 12, color: Colors.grey),
                                   ),
                                 ),
                               ],
@@ -454,13 +487,15 @@ class _NearestHospitalClinicsScreenState extends State<NearestHospitalClinicsScr
                             children: [
                               Expanded(
                                 child: ElevatedButton.icon(
-                                  onPressed: () => _openInMaps(facility, startNavigation: false),
+                                  onPressed: () => _openInMaps(facility,
+                                      startNavigation: false),
                                   icon: const Icon(Icons.location_on, size: 18),
                                   label: const Text('View'),
                                   style: ElevatedButton.styleFrom(
                                     backgroundColor: Colors.grey.shade700,
                                     foregroundColor: Colors.white,
-                                    padding: const EdgeInsets.symmetric(vertical: 12),
+                                    padding: const EdgeInsets.symmetric(
+                                        vertical: 12),
                                   ),
                                 ),
                               ),
@@ -468,13 +503,15 @@ class _NearestHospitalClinicsScreenState extends State<NearestHospitalClinicsScr
                               Expanded(
                                 flex: 2,
                                 child: ElevatedButton.icon(
-                                  onPressed: () => _openInMaps(facility, startNavigation: true),
+                                  onPressed: () => _openInMaps(facility,
+                                      startNavigation: true),
                                   icon: const Icon(Icons.directions, size: 18),
                                   label: const Text('Start Navigation'),
                                   style: ElevatedButton.styleFrom(
                                     backgroundColor: Colors.teal,
                                     foregroundColor: Colors.white,
-                                    padding: const EdgeInsets.symmetric(vertical: 12),
+                                    padding: const EdgeInsets.symmetric(
+                                        vertical: 12),
                                   ),
                                 ),
                               ),
@@ -492,7 +529,8 @@ class _NearestHospitalClinicsScreenState extends State<NearestHospitalClinicsScr
     );
   }
 
-  Future<void> _openInMaps(MedicalFacility facility, {bool startNavigation = false}) async {
+  Future<void> _openInMaps(MedicalFacility facility,
+      {bool startNavigation = false}) async {
     String url;
     if (startNavigation) {
       url = facility.getDirectionsUrl(

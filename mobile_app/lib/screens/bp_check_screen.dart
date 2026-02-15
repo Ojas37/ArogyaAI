@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../providers/language_provider.dart';
 import '../services/bp_classifier.dart';
 import '../services/location_service.dart';
 import '../services/geocoding_service.dart';
@@ -36,7 +38,9 @@ class _BPCheckScreenState extends State<BPCheckScreen> {
   }
 
   Future<void> _searchLocation() async {
-    setState(() { _isSearchingPlace = true; });
+    setState(() {
+      _isSearchingPlace = true;
+    });
     final place = await GeocodingService.searchPlace(_placeController.text);
     if (place != null) {
       setState(() {
@@ -46,12 +50,17 @@ class _BPCheckScreenState extends State<BPCheckScreen> {
         _locationAcquired = true;
       });
     }
-    setState(() { _isSearchingPlace = false; });
+    setState(() {
+      _isSearchingPlace = false;
+    });
   }
 
   Future<void> _getCurrentLocation() async {
-    setState(() { _isLoading = true; });
-    final pos = await LocationService.getCurrentLocationWithTimeout(timeout: const Duration(seconds: 10));
+    setState(() {
+      _isLoading = true;
+    });
+    final pos = await LocationService.getCurrentLocationWithTimeout(
+        timeout: const Duration(seconds: 10));
     if (pos != null) {
       setState(() {
         _selectedLatitude = pos.latitude;
@@ -60,12 +69,16 @@ class _BPCheckScreenState extends State<BPCheckScreen> {
         _locationAcquired = true;
       });
     }
-    setState(() { _isLoading = false; });
+    setState(() {
+      _isLoading = false;
+    });
   }
 
   Future<void> _findFacilities() async {
     if (_selectedLatitude == null || _selectedLongitude == null) return;
-    setState(() { _isLoading = true; });
+    setState(() {
+      _isLoading = true;
+    });
     final facilities = await OverpassService.searchNearbyFacilities(
       latitude: _selectedLatitude!,
       longitude: _selectedLongitude!,
@@ -73,7 +86,9 @@ class _BPCheckScreenState extends State<BPCheckScreen> {
       limit: 50,
       radiusMeters: 20000,
     );
-    setState(() { _isLoading = false; });
+    setState(() {
+      _isLoading = false;
+    });
     // Show facilities or message
     if (facilities.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -131,7 +146,9 @@ class _BPCheckScreenState extends State<BPCheckScreen> {
   }
 
   void _navigateToResults() {
-    if (_selectedLatitude != null && _selectedLongitude != null && _bpResult != null) {
+    if (_selectedLatitude != null &&
+        _selectedLongitude != null &&
+        _bpResult != null) {
       Navigator.push(
         context,
         MaterialPageRoute(
@@ -151,8 +168,10 @@ class _BPCheckScreenState extends State<BPCheckScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final languageProvider = Provider.of<LanguageProvider>(context);
+
     return Scaffold(
-      appBar: AppBar(title: const Text('Blood Pressure Check')),
+      appBar: AppBar(title: Text(languageProvider.t('vitals.bloodPressure'))),
       body: Form(
         key: _formKey,
         child: SingleChildScrollView(
@@ -163,19 +182,30 @@ class _BPCheckScreenState extends State<BPCheckScreen> {
               const SizedBox(height: 10),
               TextFormField(
                 controller: _systolicController,
-                decoration: const InputDecoration(labelText: 'Systolic (mmHg)'),
+                decoration: InputDecoration(
+                  labelText: languageProvider.t('vitalsForm.systolicLabel'),
+                ),
                 keyboardType: TextInputType.number,
-                validator: (v) => v == null || v.isEmpty ? 'Enter systolic' : null,
+                validator: (v) => v == null || v.isEmpty
+                    ? languageProvider.t('errors.invalidInput')
+                    : null,
               ),
               const SizedBox(height: 10),
               TextFormField(
                 controller: _diastolicController,
-                decoration: const InputDecoration(labelText: 'Diastolic (mmHg)'),
+                decoration: InputDecoration(
+                  labelText: languageProvider.t('vitalsForm.diastolicLabel'),
+                ),
                 keyboardType: TextInputType.number,
-                validator: (v) => v == null || v.isEmpty ? 'Enter diastolic' : null,
+                validator: (v) => v == null || v.isEmpty
+                    ? languageProvider.t('errors.invalidInput')
+                    : null,
               ),
               const SizedBox(height: 20),
-              Text('Your Location:', style: Theme.of(context).textTheme.titleMedium),
+              Text(
+                languageProvider.t('location.yourLocation'),
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
               const SizedBox(height: 8),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -183,10 +213,13 @@ class _BPCheckScreenState extends State<BPCheckScreen> {
                   Expanded(
                     child: GestureDetector(
                       onTap: () {
-                        setState(() { _useManualLocation = !_useManualLocation; });
+                        setState(() {
+                          _useManualLocation = !_useManualLocation;
+                        });
                       },
                       child: Container(
-                        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                        padding: const EdgeInsets.symmetric(
+                            vertical: 12, horizontal: 16),
                         decoration: BoxDecoration(
                           color: Colors.grey.shade100,
                           borderRadius: BorderRadius.circular(12),
@@ -194,16 +227,26 @@ class _BPCheckScreenState extends State<BPCheckScreen> {
                         ),
                         child: Row(
                           children: [
-                            Icon(_useManualLocation ? Icons.edit_location_alt : Icons.my_location, color: Colors.teal),
+                            Icon(
+                                _useManualLocation
+                                    ? Icons.edit_location_alt
+                                    : Icons.my_location,
+                                color: Colors.teal),
                             const SizedBox(width: 12),
                             Expanded(
-                              child: Text(_useManualLocation ? 'Enter location manually' : 'Using GPS location',
-                                style: const TextStyle(fontSize: 16)),
+                              child: Text(
+                                _useManualLocation
+                                    ? languageProvider.t('location.enterManual')
+                                    : languageProvider.t('location.usingGps'),
+                                style: const TextStyle(fontSize: 16),
+                              ),
                             ),
                             Switch(
                               value: _useManualLocation,
                               onChanged: (val) {
-                                setState(() { _useManualLocation = val; });
+                                setState(() {
+                                  _useManualLocation = val;
+                                });
                               },
                             ),
                           ],
@@ -217,24 +260,44 @@ class _BPCheckScreenState extends State<BPCheckScreen> {
               if (_useManualLocation) ...[
                 DropdownButton<String>(
                   value: _locationType,
-                  items: const [
-                    DropdownMenuItem(value: 'City', child: Text('City')),
-                    DropdownMenuItem(value: 'Village', child: Text('Village')),
-                    DropdownMenuItem(value: 'Pin Code', child: Text('Pin Code')),
-                    DropdownMenuItem(value: 'Taluka', child: Text('Taluka')),
+                  items: [
+                    DropdownMenuItem(
+                      value: 'City',
+                      child: Text(languageProvider.t('location.city')),
+                    ),
+                    DropdownMenuItem(
+                      value: 'Village',
+                      child: Text(languageProvider.t('location.village')),
+                    ),
+                    DropdownMenuItem(
+                      value: 'Pin Code',
+                      child: Text(languageProvider.t('location.pinCode')),
+                    ),
+                    DropdownMenuItem(
+                      value: 'Taluka',
+                      child: Text(languageProvider.t('location.taluka')),
+                    ),
                   ],
                   onChanged: (val) {
-                    if (val != null) setState(() { _locationType = val; });
+                    if (val != null) {
+                      setState(() {
+                        _locationType = val;
+                      });
+                    }
                   },
                 ),
                 TextFormField(
                   controller: _placeController,
-                  decoration: InputDecoration(labelText: 'Enter $_locationType'),
+                  decoration: InputDecoration(
+                    labelText: languageProvider.t('location.enterLocation'),
+                  ),
                 ),
                 const SizedBox(height: 8),
                 ElevatedButton(
                   onPressed: _isSearchingPlace ? null : _searchLocation,
-                  child: _isSearchingPlace ? const CircularProgressIndicator() : const Text('Search Location'),
+                  child: _isSearchingPlace
+                      ? const CircularProgressIndicator()
+                      : Text(languageProvider.t('location.searchLocation')),
                 ),
               ] else ...[
                 Container(
@@ -248,7 +311,15 @@ class _BPCheckScreenState extends State<BPCheckScreen> {
                     children: [
                       const Icon(Icons.location_off, color: Colors.orange),
                       const SizedBox(width: 8),
-                      Expanded(child: Text(_locationAcquired ? 'Location acquired' : 'Location not acquired', style: const TextStyle(color: Colors.orange))),
+                      Expanded(
+                        child: Text(
+                          _locationAcquired
+                              ? languageProvider.t('location.locationAcquired')
+                              : languageProvider
+                                  .t('location.locationNotAcquired'),
+                          style: const TextStyle(color: Colors.orange),
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -256,18 +327,22 @@ class _BPCheckScreenState extends State<BPCheckScreen> {
                 ElevatedButton.icon(
                   onPressed: _isLoading ? null : _getCurrentLocation,
                   icon: const Icon(Icons.my_location),
-                  label: _isLoading ? const CircularProgressIndicator() : const Text('Get Current Location'),
+                  label: _isLoading
+                      ? const CircularProgressIndicator()
+                      : Text(languageProvider.t('location.getCurrentLocation')),
                 ),
               ],
               const SizedBox(height: 20),
               ElevatedButton(
                 onPressed: _findFacilities,
-                child: _isLoading ? const CircularProgressIndicator() : const Text('Find Nearby Medical Facilities'),
+                child: _isLoading
+                    ? const CircularProgressIndicator()
+                    : Text(languageProvider.t('location.findNearbyFacilities')),
               ),
               const SizedBox(height: 20),
               ElevatedButton(
                 onPressed: _classifyBP,
-                child: const Text('Check BP Status'),
+                child: Text(languageProvider.t('vitalsForm.checkNow')),
               ),
               if (_bpResult != null) ...[
                 const SizedBox(height: 24),
@@ -283,7 +358,12 @@ class _BPCheckScreenState extends State<BPCheckScreen> {
                     crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
                       Text(
-                        _bpResult!.status,
+                        _bpResult!.level == BPLevel.green
+                            ? languageProvider.t('vitalsForm.statusNormal')
+                            : _bpResult!.level == BPLevel.yellow
+                                ? languageProvider.t('vitalsForm.statusWarning')
+                                : languageProvider
+                                    .t('vitalsForm.statusEmergency'),
                         style: TextStyle(
                           color: _bpResult!.color,
                           fontSize: 22,
@@ -292,7 +372,12 @@ class _BPCheckScreenState extends State<BPCheckScreen> {
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        _bpResult!.message,
+                        _bpResult!.level == BPLevel.green
+                            ? languageProvider.t('vitalsForm.adviceNormal')
+                            : _bpResult!.level == BPLevel.yellow
+                                ? languageProvider.t('vitalsForm.adviceMonitor')
+                                : languageProvider
+                                    .t('vitalsForm.adviceSeekCare'),
                         style: TextStyle(
                           color: _bpResult!.color,
                           fontSize: 16,

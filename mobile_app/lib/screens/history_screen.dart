@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../providers/language_provider.dart';
 import '../services/storage_service.dart';
 
 class HistoryScreen extends StatefulWidget {
@@ -25,6 +27,8 @@ class _HistoryScreenState extends State<HistoryScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final languageProvider = Provider.of<LanguageProvider>(context);
+
     return Padding(
       padding: const EdgeInsets.all(16),
       child: Column(
@@ -33,9 +37,10 @@ class _HistoryScreenState extends State<HistoryScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text(
-                'Consultation History',
-                style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+              Text(
+                languageProvider.t('history.title'),
+                style:
+                    const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
               ),
               if (_reports.isNotEmpty)
                 TextButton.icon(
@@ -43,11 +48,13 @@ class _HistoryScreenState extends State<HistoryScreen> {
                     await StorageService.clearAll();
                     _loadReports();
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('History cleared')),
+                      SnackBar(
+                          content:
+                              Text(languageProvider.t('history.clearHistory'))),
                     );
                   },
                   icon: const Icon(Icons.delete_outline),
-                  label: const Text('Clear All'),
+                  label: Text(languageProvider.t('common.clear')),
                 ),
             ],
           ),
@@ -67,16 +74,16 @@ class _HistoryScreenState extends State<HistoryScreen> {
                         ),
                         const SizedBox(height: 16),
                         Text(
-                          'No consultation history yet',
+                          languageProvider.t('history.noHistory'),
                           style: TextStyle(
                             fontSize: 16,
                             color: Colors.grey.shade600,
                           ),
                         ),
                         const SizedBox(height: 8),
-                        const Text(
-                          'Your saved consultations will appear here',
-                          style: TextStyle(
+                        Text(
+                          languageProvider.t('history.startConsultation'),
+                          style: const TextStyle(
                             fontSize: 14,
                             color: Colors.grey,
                           ),
@@ -99,7 +106,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
 
   Widget _buildReportCard(Map<String, dynamic> report) {
     final urgency = report['urgencyLevel'] ?? 'unknown';
-    
+
     Color urgencyColor;
     switch (urgency) {
       case 'emergency':
@@ -197,12 +204,10 @@ class _HistoryScreenState extends State<HistoryScreen> {
                       ),
                     ),
                     const SizedBox(height: 8),
-                    ...(report['nextSteps'] as List).map((step) => 
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 4),
-                        child: Text('• $step'),
-                      )
-                    ),
+                    ...(report['nextSteps'] as List).map((step) => Padding(
+                          padding: const EdgeInsets.only(bottom: 4),
+                          child: Text('• $step'),
+                        )),
                   ],
                 ],
               ),
@@ -215,7 +220,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
 
   Widget _buildDetailRow(String label, String? value) {
     if (value == null) return const SizedBox.shrink();
-    
+
     return Padding(
       padding: const EdgeInsets.only(bottom: 16),
       child: Column(
