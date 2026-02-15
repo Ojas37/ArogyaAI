@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:provider/provider.dart';
 import '../providers/language_provider.dart';
 import '../services/bp_classifier.dart';
 import '../services/location_service.dart';
 import '../services/geocoding_service.dart';
-import '../services/overpass_service.dart';
 import 'bp_results_screen.dart';
 
 class BPCheckScreen extends StatefulWidget {
@@ -19,15 +19,15 @@ class _BPCheckScreenState extends State<BPCheckScreen> {
   final _systolicController = TextEditingController();
   final _diastolicController = TextEditingController();
   final _placeController = TextEditingController();
+  final Set<BPSymptom> _selectedSymptoms = {};
   bool _isLoading = false;
   bool _isSearchingPlace = false;
   bool _useManualLocation = false;
+  Position? _currentPosition;
   double? _selectedLatitude;
   double? _selectedLongitude;
   String? _selectedPlaceName;
-  String _locationType = 'City';
-  bool _locationAcquired = false;
-  BPResult? _bpResult;
+  String _locationType = 'City'; // City, Village, Pin Code, Taluka
 
   @override
   void dispose() {
@@ -37,132 +37,348 @@ class _BPCheckScreenState extends State<BPCheckScreen> {
     super.dispose();
   }
 
-  Future<void> _searchLocation() async {
-    setState(() {
-      _isSearchingPlace = true;
-    });
-    final place = await GeocodingService.searchPlace(_placeController.text);
-    if (place != null) {
-      setState(() {
-        _selectedLatitude = place['latitude'];
-        _selectedLongitude = place['longitude'];
-        _selectedPlaceName = place['displayName'];
-        _locationAcquired = true;
-      });
+  String _locationTypeLabel(LanguageProvider languageProvider) {
+    switch (_locationType) {
+      case 'City':
+        return languageProvider.t('location.city');
+      case 'Village':
+        return languageProvider.t('location.village');
+      case 'Pin Code':
+        return languageProvider.t('location.pinCode');
+      case 'Taluka':
+        return languageProvider.t('location.taluka');
+      default:
+        return languageProvider.t('location.enterLocation');
     }
-    setState(() {
-      _isSearchingPlace = false;
-    });
+  }
+
+  String _getHintText(LanguageProvider languageProvider) {
+    switch (_locationType) {
+      case 'City':
+        return languageProvider.t('bloodPressure.hintCity');
+      case 'Village':
+        return languageProvider.t('bloodPressure.hintVillage');
+      case 'Pin Code':
+        return languageProvider.t('bloodPressure.hintPinCode');
+      case 'Taluka':
+        return languageProvider.t('bloodPressure.hintTaluka');
+      default:
+        return languageProvider.t('location.enterLocation');
+    }
+  }
+
+  String _getLocationTip(LanguageProvider languageProvider) {
+    switch (_locationType) {
+      case 'City':
+        return languageProvider.t('bloodPressure.tipCity');
+      case 'Village':
+        return languageProvider.t('bloodPressure.tipVillage');
+      case 'Pin Code':
+        return languageProvider.t('bloodPressure.tipPinCode');
+      case 'Taluka':
+        return languageProvider.t('bloodPressure.tipTaluka');
+      default:
+        return '';
+    }
   }
 
   Future<void> _getCurrentLocation() async {
-    setState(() {
-      _isLoading = true;
-    });
-    final pos = await LocationService.getCurrentLocationWithTimeout(
-        timeout: const Duration(seconds: 10));
-    if (pos != null) {
-      setState(() {
-        _selectedLatitude = pos.latitude;
-        _selectedLongitude = pos.longitude;
-        _selectedPlaceName = 'Current Location';
-        _locationAcquired = true;
-      });
-    }
-    setState(() {
-      _isLoading = false;
-    });
-  }
+    final languageProvider =
+        Provider.of<LanguageProvider>(context, listen: false);
 
-  Future<void> _findFacilities() async {
-    if (_selectedLatitude == null || _selectedLongitude == null) return;
-    setState(() {
-      _isLoading = true;
-    });
-    final facilities = await OverpassService.searchNearbyFacilities(
-      latitude: _selectedLatitude!,
-      longitude: _selectedLongitude!,
-      facilityType: 'hospital,clinic',
-      limit: 50,
-      radiusMeters: 20000,
-    );
-    setState(() {
-      _isLoading = false;
-    });
-    // Show facilities or message
-    if (facilities.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No facilities found nearby.')),
+    setState(() => _isLoading = true);
+
+    try {
+      // Check if location services are enabled
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        if (mounted) {
+          bool openSettings = await _showLocationServiceDialog();
+          if (openSettings) {
+            await Geolocator.openLocationSettings();
+          }
+        }
+        setState(() => _isLoading = false);
+        return;
+      }
+
+      // Check location permissions
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) {
+          if (mounted) {
+            await _showPermissionDialog();
+          }
+          setState(() => _isLoading = false);
+          return;
+        }
+      }
+
+      if (permission == LocationPermission.deniedForever) {
+        if (mounted) {
+          await _showPermissionDialog();
+        }
+        setState(() => _isLoading = false);
+        return;
+      }
+
+      // Get current position
+      Position position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
       );
-    } else {
-      // TODO: Show facility list UI
+
+      if (mounted) {
+        setState(() {
+          _currentPosition = position;
+          _selectedLatitude = position.latitude;
+          _selectedLongitude = position.longitude;
+          _selectedPlaceName = 'Current Location';
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(languageProvider.t('bloodPressure.locationAcquiredSuccess')),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+    }  catch (e) {
+      if (mounted) {
+        String errorMessage = languageProvider.t(
+          'bloodPressure.locationError',
+          params: {'error': e.toString()},
+        );
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(errorMessage),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
   }
 
-  void _classifyBP() {
-    if (!_formKey.currentState!.validate()) return;
-    final systolic = double.tryParse(_systolicController.text);
-    final diastolic = double.tryParse(_diastolicController.text);
-    if (systolic == null || diastolic == null) return;
-    final result = BPClassifier.evaluate(systolic, diastolic);
-    setState(() {
-      _bpResult = result;
-    });
-    if (result.level == BPLevel.red) {
-      // Emergency: ask for location and show hospital list
-      _showEmergencyDialog(result);
+  Future<void> _searchPlace() async {
+    final languageProvider =
+        Provider.of<LanguageProvider>(context, listen: false);
+
+    if (_placeController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            languageProvider.t(
+              'bloodPressure.enterLocationType',
+              params: {'type': _locationTypeLabel(languageProvider)},
+            ),
+          ),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    setState(() => _isSearchingPlace = true);
+
+    try {
+      // Format search query based on location type
+      String searchQuery = _placeController.text;
+      if (_locationType == 'Pin Code') {
+        searchQuery += ', India';
+      } else if (_locationType == 'Taluka') {
+        searchQuery += ', Maharashtra, India';
+      }
+
+      final result = await GeocodingService.searchPlace(searchQuery);
+
+      if (result != null && mounted) {
+        setState(() {
+          _selectedLatitude = result['latitude'];
+          _selectedLongitude = result['longitude'];
+          _selectedPlaceName = result['displayName'];
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              languageProvider.t(
+                'bloodPressure.locationFound',
+                params: {'name': result['displayName']},
+              ),
+            ),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      } else if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(languageProvider.t('bloodPressure.locationNotFound')),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        String errorMessage = languageProvider.t(
+          'bloodPressure.errorMessage',
+          params: {'error': e.toString()},
+        );
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(errorMessage),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isSearchingPlace = false);
+      }
     }
   }
 
-  void _showEmergencyDialog(BPResult result) {
+  Future<bool> _showLocationServiceDialog() async {
+    final languageProvider =
+        Provider.of<LanguageProvider>(context, listen: false);
+    return await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: Row(
+              children: [
+                const Icon(Icons.location_off, color: Colors.orange),
+                const SizedBox(width: 8),
+                Text(languageProvider.t('bloodPressure.locationServicesDisabled')),
+              ],
+            ),
+            content: Text(
+              languageProvider.t('bloodPressure.locationServicesOff'),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: Text(languageProvider.t('common.cancel')),
+              ),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(context, true),
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.teal),
+                child: Text(languageProvider.t('errors.openSettings')),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+  }
+
+  Future<void> _showPermissionDialog() async {
+    final languageProvider =
+        Provider.of<LanguageProvider>(context, listen: false);
     showDialog(
       context: context,
-      barrierDismissible: false,
       builder: (context) => AlertDialog(
         title: Row(
           children: [
-            Icon(Icons.warning, color: result.color),
+            const Icon(Icons.error, color: Colors.red),
             const SizedBox(width: 8),
-            Text(result.status, style: TextStyle(color: result.color)),
+            Text(languageProvider.t('errors.locationRequired')),
           ],
         ),
-        content: Text(result.message),
+        content: Text(
+          languageProvider.t('errors.locationMessage'),
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
+            child: Text(languageProvider.t('common.cancel')),
           ),
           ElevatedButton(
             onPressed: () {
               Navigator.pop(context);
-              _navigateToResults();
+              LocationService.openAppSettings();
             },
-            style: ElevatedButton.styleFrom(backgroundColor: result.color),
-            child: const Text('Find Nearby Hospitals'),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.teal),
+            child: Text(languageProvider.t('errors.openSettings')),
           ),
         ],
       ),
     );
   }
 
-  void _navigateToResults() {
-    if (_selectedLatitude != null &&
-        _selectedLongitude != null &&
-        _bpResult != null) {
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => BPResultsScreen(
-            result: _bpResult!,
-            latitude: _selectedLatitude!,
-            longitude: _selectedLongitude!,
+  Future<void> _handleSubmit() async {
+    if (!_formKey.currentState!.validate()) {
+      return;
+    }
+
+    setState(() => _isLoading = true);
+
+    try {
+      // Parse BP values
+      final systolic = double.parse(_systolicController.text);
+      final diastolic = double.parse(_diastolicController.text);
+
+      // Get location
+      double? latitude = _selectedLatitude;
+      double? longitude = _selectedLongitude;
+
+      // Validate location is available
+      if (latitude == null || longitude == null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                Provider.of<LanguageProvider>(context, listen: false)
+                    .t('bloodPressure.locationFirst'),
+              ),
+              backgroundColor: Colors.orange,
+            ),
+          );
+          setState(() => _isLoading = false);
+        }
+        return;
+      }
+
+      // Classify reading
+      final result = BPClassifier.evaluate(systolic, diastolic);
+
+      // Navigate to results
+      if (mounted) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => BPResultsScreen(
+              result: result,
+              latitude: latitude,
+              longitude: longitude,
+            ),
           ),
-        ),
-      );
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please provide your location first.')),
-      );
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              Provider.of<LanguageProvider>(context, listen: false).t(
+                'bloodPressure.errorMessage',
+                params: {'error': e.toString()},
+              ),
+            ),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
   }
 
@@ -171,227 +387,444 @@ class _BPCheckScreenState extends State<BPCheckScreen> {
     final languageProvider = Provider.of<LanguageProvider>(context);
 
     return Scaffold(
-      appBar: AppBar(title: Text(languageProvider.t('vitals.bloodPressure'))),
-      body: Form(
-        key: _formKey,
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(16),
+      appBar: AppBar(
+        title: Text(languageProvider.t('bloodPressure.title')),
+        backgroundColor: Colors.teal,
+      ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(16),
+        child: Form(
+          key: _formKey,
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const SizedBox(height: 10),
-              TextFormField(
-                controller: _systolicController,
-                decoration: InputDecoration(
-                  labelText: languageProvider.t('vitalsForm.systolicLabel'),
-                ),
-                keyboardType: TextInputType.number,
-                validator: (v) => v == null || v.isEmpty
-                    ? languageProvider.t('errors.invalidInput')
-                    : null,
+              // Header
+              const Icon(
+                Icons.favorite,
+                size: 64,
+                color: Colors.red,
               ),
-              const SizedBox(height: 10),
-              TextFormField(
-                controller: _diastolicController,
-                decoration: InputDecoration(
-                  labelText: languageProvider.t('vitalsForm.diastolicLabel'),
-                ),
-                keyboardType: TextInputType.number,
-                validator: (v) => v == null || v.isEmpty
-                    ? languageProvider.t('errors.invalidInput')
-                    : null,
-              ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 16),
               Text(
-                languageProvider.t('location.yourLocation'),
-                style: Theme.of(context).textTheme.titleMedium,
+                languageProvider.t('bloodPressure.header'),
+                style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+                textAlign: TextAlign.center,
               ),
               const SizedBox(height: 8),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Expanded(
-                    child: GestureDetector(
-                      onTap: () {
+              Text(
+                languageProvider.t('bloodPressure.description'),
+                style: const TextStyle(color: Colors.grey),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 32),
+
+              // Systolic input
+              TextFormField(
+                controller: _systolicController,
+                keyboardType: TextInputType.number,
+                decoration: InputDecoration(
+                  labelText: languageProvider.t('vitalsForm.systolicLabel'),
+                  hintText: languageProvider.t('bloodPressure.hintSystolic'),
+                  border: const OutlineInputBorder(),
+                  prefixIcon: const Icon(Icons.monitor_heart),
+                ),
+                validator: (value) {
+                  if (value == null || value.isEmpty) {
+                    return languageProvider.t('bloodPressure.requiredSystolic');
+                  }
+                  final num? systolic = double.tryParse(value);
+                  if (systolic == null || systolic <= 0 || systolic > 300) {
+                    return languageProvider.t('bloodPressure.invalidSystolic');
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 16),
+
+              // Diastolic input
+              TextFormField(
+                controller: _diastolicController,
+                keyboardType: TextInputType.number,
+                decoration: InputDecoration(
+                  labelText: languageProvider.t('vitalsForm.diastolicLabel'),
+                  hintText: languageProvider.t('bloodPressure.hintDiastolic'),
+                  border: const OutlineInputBorder(),
+                  prefixIcon: const Icon(Icons.monitor_heart_outlined),
+                ),
+                validator: (value) {
+                  if (value == null || value.isEmpty) {
+                    return languageProvider.t('bloodPressure.requiredDiastolic');
+                  }
+                  final num? diastolic = double.tryParse(value);
+                  if (diastolic == null || diastolic <= 0 || diastolic > 200) {
+                    return languageProvider.t('bloodPressure.invalidDiastolic');
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 24),
+
+              // Location section
+              Text(
+                languageProvider.t('location.yourLocation'),
+                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 12),
+
+              // Location method toggle
+              Container(
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade100,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.grey.shade300),
+                ),
+                child: Column(
+                  children: [
+                    SwitchListTile(
+                      title: Text(languageProvider.t('location.enterManual')),
+                      subtitle: Text(
+                        _useManualLocation
+                            ? languageProvider.t('bloodPressure.manualEntryMode')
+                            : languageProvider.t('location.usingGps'),
+                        style: const TextStyle(fontSize: 12),
+                      ),
+                      value: _useManualLocation,
+                      activeThumbColor: Colors.teal,
+                      onChanged: (value) {
+                        setState(() => _useManualLocation = value);
+                      },
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+
+              // GPS location or manual input
+              if (!_useManualLocation)
+                Container(
+                  decoration: BoxDecoration(
+                    color: _currentPosition != null
+                        ? Colors.green.shade50
+                        : Colors.orange.shade50,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: _currentPosition != null
+                          ? Colors.green.shade200
+                          : Colors.orange.shade200,
+                    ),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      children: [
+                        Row(
+                          children: [
+                            Icon(
+                              _selectedLatitude != null
+                                  ? Icons.location_on
+                                  : Icons.location_off,
+                              color: _selectedLatitude != null
+                                  ? Colors.green
+                                  : Colors.orange,
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                _selectedLatitude != null
+                                    ? languageProvider.t(
+                                        'location.coordinates',
+                                        params: {
+                                          'lat': _selectedLatitude!
+                                              .toStringAsFixed(4),
+                                          'lon': _selectedLongitude!
+                                              .toStringAsFixed(4),
+                                        },
+                                      )
+                                    : languageProvider
+                                        .t('location.locationNotAcquired'),
+                                style: const TextStyle(fontSize: 14),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        ElevatedButton.icon(
+                          onPressed: _isLoading ? null : _getCurrentLocation,
+                          icon: _isLoading
+                              ? const SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Colors.white,
+                                  ),
+                                )
+                              : const Icon(Icons.my_location),
+                          label: Text(
+                            _isLoading
+                                ? languageProvider.t('location.gettingLocation')
+                                : languageProvider.t('location.getCurrentLocation'),
+                          ),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.teal,
+                            minimumSize: const Size(double.infinity, 45),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                )
+              else
+                Column(
+                  children: [
+                    // Location type dropdown
+                    DropdownButtonFormField<String>(
+                      value: _locationType,
+                      decoration: InputDecoration(
+                        labelText: languageProvider.t('bloodPressure.searchBy'),
+                        border: const OutlineInputBorder(),
+                        prefixIcon: const Icon(Icons.map),
+                      ),
+                      items: [
+                        DropdownMenuItem(
+                          value: 'City',
+                          child: Text(languageProvider.t('location.city')),
+                        ),
+                        DropdownMenuItem(
+                          value: 'Village',
+                          child: Text(languageProvider.t('location.village')),
+                        ),
+                        DropdownMenuItem(
+                          value: 'Pin Code',
+                          child: Text(languageProvider.t('location.pinCode')),
+                        ),
+                        DropdownMenuItem(
+                          value: 'Taluka',
+                          child: Text(languageProvider.t('location.taluka')),
+                        ),
+                      ],
+                      onChanged: (value) {
                         setState(() {
-                          _useManualLocation = !_useManualLocation;
+                          _locationType = value!;
+                          _placeController.clear();
+                          _selectedLatitude = null;
+                          _selectedLongitude = null;
+                          _selectedPlaceName = null;
                         });
                       },
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                            vertical: 12, horizontal: 16),
+                    ),
+                    const SizedBox(height: 12),
+                    // Place name search field
+                    TextFormField(
+                      controller: _placeController,
+                      keyboardType: _locationType == 'Pin Code'
+                          ? TextInputType.number
+                          : TextInputType.text,
+                      decoration: InputDecoration(
+                        labelText: languageProvider.t('location.enterLocation'),
+                        hintText: _getHintText(languageProvider),
+                        border: const OutlineInputBorder(),
+                        prefixIcon: const Icon(Icons.search),
+                        suffixIcon: _isSearchingPlace
+                            ? const Padding(
+                                padding: EdgeInsets.all(12),
+                                child: SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child:
+                                      CircularProgressIndicator(strokeWidth: 2),
+                                ),
+                              )
+                            : null,
+                      ),
+                      onFieldSubmitted: (_) => _searchPlace(),
+                    ),
+                    const SizedBox(height: 12),
+                    ElevatedButton.icon(
+                      onPressed: _isSearchingPlace ? null : _searchPlace,
+                      icon: const Icon(Icons.search),
+                      label: Text(languageProvider.t('location.searchLocation')),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.teal,
+                        minimumSize: const Size(double.infinity, 45),
+                      ),
+                    ),
+                    if (_selectedPlaceName != null) ...[
+                      const SizedBox(height: 12),
+                      Container(
+                        padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
-                          color: Colors.grey.shade100,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: Colors.grey.shade300),
+                          color: Colors.green.shade50,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.green.shade200),
                         ),
                         child: Row(
                           children: [
-                            Icon(
-                                _useManualLocation
-                                    ? Icons.edit_location_alt
-                                    : Icons.my_location,
-                                color: Colors.teal),
-                            const SizedBox(width: 12),
+                            const Icon(Icons.check_circle,
+                                color: Colors.green, size: 20),
+                            const SizedBox(width: 8),
                             Expanded(
                               child: Text(
-                                _useManualLocation
-                                    ? languageProvider.t('location.enterManual')
-                                    : languageProvider.t('location.usingGps'),
-                                style: const TextStyle(fontSize: 16),
+                                _selectedPlaceName!,
+                                style: const TextStyle(fontSize: 12),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
                               ),
-                            ),
-                            Switch(
-                              value: _useManualLocation,
-                              onChanged: (val) {
-                                setState(() {
-                                  _useManualLocation = val;
-                                });
-                              },
                             ),
                           ],
                         ),
                       ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 10),
-              if (_useManualLocation) ...[
-                DropdownButton<String>(
-                  value: _locationType,
-                  items: [
-                    DropdownMenuItem(
-                      value: 'City',
-                      child: Text(languageProvider.t('location.city')),
-                    ),
-                    DropdownMenuItem(
-                      value: 'Village',
-                      child: Text(languageProvider.t('location.village')),
-                    ),
-                    DropdownMenuItem(
-                      value: 'Pin Code',
-                      child: Text(languageProvider.t('location.pinCode')),
-                    ),
-                    DropdownMenuItem(
-                      value: 'Taluka',
-                      child: Text(languageProvider.t('location.taluka')),
+                    ],
+                    const SizedBox(height: 8),
+                    Text(
+                      _getLocationTip(languageProvider),
+                      style:
+                          TextStyle(fontSize: 12, color: Colors.grey.shade600),
                     ),
                   ],
-                  onChanged: (val) {
-                    if (val != null) {
-                      setState(() {
-                        _locationType = val;
-                      });
-                    }
-                  },
                 ),
-                TextFormField(
-                  controller: _placeController,
-                  decoration: InputDecoration(
-                    labelText: languageProvider.t('location.enterLocation'),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                ElevatedButton(
-                  onPressed: _isSearchingPlace ? null : _searchLocation,
-                  child: _isSearchingPlace
-                      ? const CircularProgressIndicator()
-                      : Text(languageProvider.t('location.searchLocation')),
-                ),
-              ] else ...[
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.orange.shade50,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.orange.shade200),
-                  ),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.location_off, color: Colors.orange),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          _locationAcquired
-                              ? languageProvider.t('location.locationAcquired')
-                              : languageProvider
-                                  .t('location.locationNotAcquired'),
-                          style: const TextStyle(color: Colors.orange),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 8),
-                ElevatedButton.icon(
-                  onPressed: _isLoading ? null : _getCurrentLocation,
-                  icon: const Icon(Icons.my_location),
-                  label: _isLoading
-                      ? const CircularProgressIndicator()
-                      : Text(languageProvider.t('location.getCurrentLocation')),
-                ),
-              ],
-              const SizedBox(height: 20),
+              const SizedBox(height: 24),
+
+              // Symptoms section
+              Text(
+                languageProvider.t('bloodPressure.symptomsTitle'),
+                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 8),
+              _buildSymptomChips(languageProvider),
+              const SizedBox(height: 32),
+
+              // Submit button
               ElevatedButton(
-                onPressed: _findFacilities,
+                onPressed: _isLoading ? null : _handleSubmit,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.teal,
+                  padding: const EdgeInsets.all(16),
+                ),
                 child: _isLoading
-                    ? const CircularProgressIndicator()
-                    : Text(languageProvider.t('location.findNearbyFacilities')),
-              ),
-              const SizedBox(height: 20),
-              ElevatedButton(
-                onPressed: _classifyBP,
-                child: Text(languageProvider.t('vitalsForm.checkNow')),
-              ),
-              if (_bpResult != null) ...[
-                const SizedBox(height: 24),
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    color: _bpResult!.color.withOpacity(0.15),
-                    border: Border.all(color: _bpResult!.color, width: 2),
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      Text(
-                        _bpResult!.level == BPLevel.green
-                            ? languageProvider.t('vitalsForm.statusNormal')
-                            : _bpResult!.level == BPLevel.yellow
-                                ? languageProvider.t('vitalsForm.statusWarning')
-                                : languageProvider
-                                    .t('vitalsForm.statusEmergency'),
-                        style: TextStyle(
-                          color: _bpResult!.color,
-                          fontSize: 22,
-                          fontWeight: FontWeight.bold,
+                    ? const SizedBox(
+                        height: 20,
+                        width: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
                         ),
+                      )
+                    : Text(
+                        languageProvider.t('vitalsForm.checkNow'),
+                        style: const TextStyle(fontSize: 18),
                       ),
-                      const SizedBox(height: 8),
-                      Text(
-                        _bpResult!.level == BPLevel.green
-                            ? languageProvider.t('vitalsForm.adviceNormal')
-                            : _bpResult!.level == BPLevel.yellow
-                                ? languageProvider.t('vitalsForm.adviceMonitor')
-                                : languageProvider
-                                    .t('vitalsForm.adviceSeekCare'),
-                        style: TextStyle(
-                          color: _bpResult!.color,
-                          fontSize: 16,
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-                    ],
-                  ),
+              ),
+              const SizedBox(height: 16),
+
+              // Disclaimer
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.orange.shade50,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.orange.shade200),
                 ),
-              ],
+                child: Row(
+                  children: [
+                    const Icon(Icons.info_outline, color: Colors.orange),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        languageProvider.t('bloodPressure.disclaimer'),
+                        style: const TextStyle(fontSize: 12),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ],
           ),
         ),
       ),
     );
+  }
+
+  Widget _buildSymptomChips(LanguageProvider languageProvider) {
+    final symptoms = [
+      BPSymptom.headache,
+      BPSymptom.dizziness,
+      BPSymptom.chestPain,
+      BPSymptom.shortnessOfBreath,
+      BPSymptom.nosebleeds,
+      BPSymptom.visionProblems,
+      BPSymptom.fatigue,
+      BPSymptom.palpitations,
+      BPSymptom.none,
+    ];
+
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: symptoms.map((symptom) {
+        final isSelected = _selectedSymptoms.contains(symptom);
+        final label = _getSymptomLabel(symptom, languageProvider);
+
+        return FilterChip(
+          label: Text(label),
+          selected: isSelected,
+          onSelected: (selected) {
+            setState(() {
+              if (symptom == BPSymptom.none) {
+                // If "None" is selected, clear all others
+                _selectedSymptoms.clear();
+                if (selected) {
+                  _selectedSymptoms.add(symptom);
+                }
+              } else {
+                // Remove "None" if selecting other symptoms
+                _selectedSymptoms.remove(BPSymptom.none);
+                if (selected) {
+                  _selectedSymptoms.add(symptom);
+                } else {
+                  _selectedSymptoms.remove(symptom);
+                }
+              }
+            });
+          },
+          backgroundColor: Colors.grey.shade200,
+          selectedColor: _isSevereSymptom(symptom)
+              ? Colors.red.shade100
+              : Colors.teal.shade100,
+        );
+      }).toList(),
+    );
+  }
+
+  String _getSymptomLabel(
+    BPSymptom symptom,
+    LanguageProvider languageProvider,
+  ) {
+    switch (symptom) {
+      case BPSymptom.headache:
+        return languageProvider.t('bloodPressure.symptom.headache');
+      case BPSymptom.dizziness:
+        return languageProvider.t('bloodPressure.symptom.dizziness');
+      case BPSymptom.chestPain:
+        return languageProvider.t('bloodPressure.symptom.chestPain');
+      case BPSymptom.shortnessOfBreath:
+        return languageProvider.t('bloodPressure.symptom.shortnessOfBreath');
+      case BPSymptom.nosebleeds:
+        return languageProvider.t('bloodPressure.symptom.nosebleeds');
+      case BPSymptom.visionProblems:
+        return languageProvider.t('bloodPressure.symptom.visionProblems');
+      case BPSymptom.fatigue:
+        return languageProvider.t('bloodPressure.symptom.fatigue');
+      case BPSymptom.palpitations:
+        return languageProvider.t('bloodPressure.symptom.palpitations');
+      case BPSymptom.none:
+        return languageProvider.t('bloodPressure.symptom.none');
+    }
+  }
+
+  bool _isSevereSymptom(BPSymptom symptom) {
+    return symptom == BPSymptom.chestPain ||
+        symptom == BPSymptom.shortnessOfBreath ||
+        symptom == BPSymptom.dizziness;
   }
 }

@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:provider/provider.dart';
 import '../models/blood_sugar_reading.dart';
 import '../models/medical_facility.dart';
 import '../services/blood_sugar_classifier.dart';
 import '../services/overpass_service.dart';
+import '../providers/language_provider.dart';
 
 class BloodSugarResultsScreen extends StatefulWidget {
   final BloodSugarReading reading;
@@ -64,6 +66,7 @@ class _BloodSugarResultsScreenState extends State<BloodSugarResultsScreen> {
   }
 
   Future<void> _callEmergency() async {
+    final languageProvider = Provider.of<LanguageProvider>(context, listen: false);
     final number = BloodSugarClassifier.getEmergencyNumber(country: 'IN');
     final uri = Uri.parse('tel:$number');
     
@@ -72,7 +75,11 @@ class _BloodSugarResultsScreenState extends State<BloodSugarResultsScreen> {
     } else {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Cannot call $number')),
+          SnackBar(
+            content: Text(
+              languageProvider.t('bloodSugarResults.cannotCallEmergency', params: {'number': number}),
+            ),
+          ),
         );
       }
     }
@@ -98,8 +105,9 @@ class _BloodSugarResultsScreenState extends State<BloodSugarResultsScreen> {
       await launchUrl(uri, mode: LaunchMode.externalApplication);
     } else {
       if (mounted) {
+        final languageProvider = Provider.of<LanguageProvider>(context, listen: false);
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Cannot open Google Maps')),
+          SnackBar(content: Text(languageProvider.t('bloodSugarResults.cannotOpenMaps'))),
         );
       }
     }
@@ -129,9 +137,11 @@ class _BloodSugarResultsScreenState extends State<BloodSugarResultsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final languageProvider = Provider.of<LanguageProvider>(context);
+    
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Blood Sugar Results'),
+        title: Text(languageProvider.t('bloodSugarResults.title')),
         backgroundColor: _getLevelColor(),
       ),
       body: SingleChildScrollView(
@@ -191,9 +201,17 @@ class _BloodSugarResultsScreenState extends State<BloodSugarResultsScreen> {
           if (widget.reading.symptoms.isNotEmpty &&
               widget.reading.symptoms.first != BloodSugarSymptom.none) ...[
             const SizedBox(height: 8),
-            Text(
-              'With ${widget.reading.symptoms.length} symptom(s)',
-              style: const TextStyle(color: Colors.grey),
+            Builder(
+              builder: (context) {
+                final languageProvider = Provider.of<LanguageProvider>(context);
+                return Text(
+                  languageProvider.t(
+                    'bloodSugarResults.withSymptoms',
+                    params: {'count': widget.reading.symptoms.length.toString()},
+                  ),
+                  style: const TextStyle(color: Colors.grey),
+                );
+              },
             ),
           ],
         ],
@@ -202,6 +220,8 @@ class _BloodSugarResultsScreenState extends State<BloodSugarResultsScreen> {
   }
 
   Widget _buildEmergencyWarning() {
+    final languageProvider = Provider.of<LanguageProvider>(context);
+    
     return Container(
       margin: const EdgeInsets.all(16),
       padding: const EdgeInsets.all(16),
@@ -212,14 +232,14 @@ class _BloodSugarResultsScreenState extends State<BloodSugarResultsScreen> {
       ),
       child: Column(
         children: [
-          const Row(
+          Row(
             children: [
-              Icon(Icons.error, color: Colors.red, size: 32),
-              SizedBox(width: 12),
+              const Icon(Icons.error, color: Colors.red, size: 32),
+              const SizedBox(width: 12),
               Expanded(
                 child: Text(
-                  'MEDICAL EMERGENCY',
-                  style: TextStyle(
+                  languageProvider.t('bloodSugarResults.medicalEmergency'),
+                  style: const TextStyle(
                     fontSize: 20,
                     fontWeight: FontWeight.bold,
                     color: Colors.red,
@@ -229,15 +249,15 @@ class _BloodSugarResultsScreenState extends State<BloodSugarResultsScreen> {
             ],
           ),
           const SizedBox(height: 12),
-          const Text(
-            'Your reading is very high and may be life-threatening. Please seek emergency care NOW.',
-            style: TextStyle(fontSize: 16),
+          Text(
+            languageProvider.t('bloodSugarResults.emergencyWarning'),
+            style: const TextStyle(fontSize: 16),
           ),
           const SizedBox(height: 16),
           ElevatedButton.icon(
             onPressed: _callEmergency,
             icon: const Icon(Icons.phone),
-            label: const Text('Call Ambulance (102)'),
+            label: Text(languageProvider.t('bloodSugarResults.callAmbulance')),
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.red,
               foregroundColor: Colors.white,
@@ -273,14 +293,16 @@ class _BloodSugarResultsScreenState extends State<BloodSugarResultsScreen> {
   }
 
   Widget _buildFacilitiesList() {
+    final languageProvider = Provider.of<LanguageProvider>(context);
+    
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Nearby Medical Facilities',
-            style: TextStyle(
+          Text(
+            languageProvider.t('bloodSugarResults.nearbyFacilities'),
+            style: const TextStyle(
               fontSize: 20,
               fontWeight: FontWeight.bold,
             ),
@@ -307,7 +329,7 @@ class _BloodSugarResultsScreenState extends State<BloodSugarResultsScreen> {
                   const SizedBox(width: 12),
                   Expanded(
                     child: Text(
-                      'Could not load facilities: $_error',
+                      languageProvider.t('bloodSugarResults.couldNotLoadFacilities', params: {'error': _error!}),
                       style: const TextStyle(color: Colors.red),
                     ),
                   ),
@@ -325,13 +347,13 @@ class _BloodSugarResultsScreenState extends State<BloodSugarResultsScreen> {
                 color: Colors.grey.shade100,
                 borderRadius: BorderRadius.circular(8),
               ),
-              child: const Row(
+              child: Row(
                 children: [
-                  Icon(Icons.info_outline, color: Colors.grey),
-                  SizedBox(width: 12),
+                  const Icon(Icons.info_outline, color: Colors.grey),
+                  const SizedBox(width: 12),
                   Expanded(
                     child: Text(
-                      'No facilities found nearby. Try searching manually in Google Maps.',
+                      languageProvider.t('bloodSugarResults.noFacilitiesFound'),
                     ),
                   ),
                 ],
@@ -379,12 +401,20 @@ class _BloodSugarResultsScreenState extends State<BloodSugarResultsScreen> {
                         ),
                       ),
                       if (facility.distanceInKm != null)
-                        Text(
-                          '${facility.distanceInKm!.toStringAsFixed(1)} km away',
-                          style: TextStyle(
-                            color: Colors.grey.shade600,
-                            fontSize: 14,
-                          ),
+                        Builder(
+                          builder: (context) {
+                            final languageProvider = Provider.of<LanguageProvider>(context);
+                            return Text(
+                              languageProvider.t(
+                                'bloodSugarResults.kmAway',
+                                params: {'distance': facility.distanceInKm!.toStringAsFixed(1)},
+                              ),
+                              style: TextStyle(
+                                color: Colors.grey.shade600,
+                                fontSize: 14,
+                              ),
+                            );
+                          },
                         ),
                     ],
                   ),
@@ -420,35 +450,40 @@ class _BloodSugarResultsScreenState extends State<BloodSugarResultsScreen> {
               ),
             ],
             const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: ElevatedButton.icon(
-                    onPressed: () => _openInMaps(facility, startNavigation: false),
-                    icon: const Icon(Icons.location_on, size: 18),
-                    label: const Text('View'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.grey.shade700,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 12),
+            Builder(
+              builder: (context) {
+                final languageProvider = Provider.of<LanguageProvider>(context);
+                return Row(
+                  children: [
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        onPressed: () => _openInMaps(facility, startNavigation: false),
+                        icon: const Icon(Icons.location_on, size: 18),
+                        label: Text(languageProvider.t('bloodSugarResults.view')),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.grey.shade700,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                        ),
+                      ),
                     ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  flex: 2,
-                  child: ElevatedButton.icon(
-                    onPressed: () => _openInMaps(facility, startNavigation: true),
-                    icon: const Icon(Icons.directions, size: 18),
-                    label: const Text('Start Navigation'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.teal,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      flex: 2,
+                      child: ElevatedButton.icon(
+                        onPressed: () => _openInMaps(facility, startNavigation: true),
+                        icon: const Icon(Icons.directions, size: 18),
+                        label: Text(languageProvider.t('bloodSugarResults.startNavigation')),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.teal,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                        ),
+                      ),
                     ),
-                  ),
-                ),
-              ],
+                  ],
+                );
+              },
             ),
           ],
         ),
@@ -470,6 +505,8 @@ class _BloodSugarResultsScreenState extends State<BloodSugarResultsScreen> {
   }
 
   Widget _buildDisclaimer() {
+    final languageProvider = Provider.of<LanguageProvider>(context);
+    
     return Container(
       margin: const EdgeInsets.all(16),
       padding: const EdgeInsets.all(12),
@@ -478,14 +515,14 @@ class _BloodSugarResultsScreenState extends State<BloodSugarResultsScreen> {
         borderRadius: BorderRadius.circular(8),
         border: Border.all(color: Colors.orange.shade200),
       ),
-      child: const Row(
+      child: Row(
         children: [
-          Icon(Icons.info_outline, color: Colors.orange),
-          SizedBox(width: 8),
+          const Icon(Icons.info_outline, color: Colors.orange),
+          const SizedBox(width: 8),
           Expanded(
             child: Text(
-              'This tool provides guidance only and does not replace professional medical care.',
-              style: TextStyle(fontSize: 12),
+              languageProvider.t('bloodSugarResults.disclaimer'),
+              style: const TextStyle(fontSize: 12),
             ),
           ),
         ],

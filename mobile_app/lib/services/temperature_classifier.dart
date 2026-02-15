@@ -1,5 +1,18 @@
 enum TemperatureLevel { green, yellow, red }
 
+enum TemperatureSymptom {
+  fever,
+  chills,
+  sweating,
+  headache,
+  bodyAches,
+  fatigue,
+  nausea,
+  vomiting,
+  dizziness,
+  none
+}
+
 class TemperatureClassifier {
   static TemperatureLevel classify(double tempC) {
     if (tempC < 35.0 || tempC > 40.0) {

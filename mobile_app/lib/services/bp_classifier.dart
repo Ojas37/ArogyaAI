@@ -2,6 +2,18 @@ import 'package:flutter/material.dart';
 
 enum BPLevel { green, yellow, red }
 
+enum BPSymptom {
+  headache,
+  dizziness,
+  chestPain,
+  shortnessOfBreath,
+  nosebleeds,
+  visionProblems,
+  fatigue,
+  palpitations,
+  none,
+}
+
 class BPResult {
   final BPLevel level;
   final String status;

@@ -1,5 +1,17 @@
 enum SpO2Level { green, yellow, red }
 
+enum SpO2Symptom {
+  shortnessOfBreath,
+  rapidBreathing,
+  chestPain,
+  confusion,
+  blueLips,
+  dizziness,
+  fatigue,
+  weakness,
+  none,
+}
+
 class SpO2Classifier {
   static SpO2Level classify(double spo2) {
     if (spo2 < 90) {

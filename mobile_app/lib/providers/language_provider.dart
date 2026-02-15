@@ -5,9 +5,24 @@ class LanguageProvider with ChangeNotifier {
   String _currentLanguage = 'en';
   final TranslationService _translationService = TranslationService();
   bool _isLoading = false;
+  bool _isInitialized = false;
+
+  LanguageProvider() {
+    _initializeTranslations();
+  }
 
   String get currentLanguage => _currentLanguage;
   bool get isLoading => _isLoading;
+
+  Future<void> _initializeTranslations() async {
+    if (_isInitialized) return;
+    
+    _isLoading = true;
+    await _translationService.load(_currentLanguage);
+    _isInitialized = true;
+    _isLoading = false;
+    notifyListeners();
+  }
 
   Future<void> setLanguage(String languageCode) async {
     if (_currentLanguage == languageCode) return;

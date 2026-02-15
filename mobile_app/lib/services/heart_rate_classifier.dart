@@ -1,5 +1,17 @@
 enum HeartRateLevel { green, yellow, red }
 
+enum HeartRateSymptom {
+  chestPain,
+  palpitations,
+  shortnesOfBreath,
+  dizziness,
+  fatigue,
+  lightheadedness,
+  fainting,
+  sweating,
+  none,
+}
+
 class HeartRateClassifier {
   static HeartRateLevel classify(int bpm) {
     if (bpm < 40 || bpm > 130) {
