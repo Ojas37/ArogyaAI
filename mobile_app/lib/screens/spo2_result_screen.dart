@@ -93,7 +93,7 @@ class _Spo2ResultScreenState extends State<Spo2ResultScreen> {
             _buildStatusCard(),
             const SizedBox(height: 24),
             if (widget.result.category == 'Emergency') _buildEmergencyUI(),
-            if (widget.result.category == 'Medium') _buildMediumUI(),
+            if (!_hospitalsFetched && !_isLoading) _buildFindHospitalsButton(),
             if (_isLoading)
               const Center(child: CircularProgressIndicator()),
             if (_error != null)
@@ -170,7 +170,17 @@ class _Spo2ResultScreenState extends State<Spo2ResultScreen> {
     );
   }
 
-  Widget _buildMediumUI() {
+  Widget _buildFindHospitalsButton() {
+    // Use appropriate color based on SpO2 category
+    Color buttonColor;
+    if (widget.result.category == 'Emergency') {
+      buttonColor = Colors.red;
+    } else if (widget.result.category == 'Medium') {
+      buttonColor = Colors.orange;
+    } else {
+      buttonColor = Colors.blue; // Normal/info color
+    }
+
     return Column(
       children: [
         ElevatedButton.icon(
@@ -178,7 +188,7 @@ class _Spo2ResultScreenState extends State<Spo2ResultScreen> {
           icon: const Icon(Icons.local_hospital),
           label: const Text('Find Nearby Hospitals'),
           style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.orange,
+            backgroundColor: buttonColor,
             foregroundColor: Colors.white,
             minimumSize: const Size(double.infinity, 50),
           ),

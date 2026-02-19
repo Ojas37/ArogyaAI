@@ -214,7 +214,7 @@ class _NearestHospitalClinicsScreenState
                       style: const TextStyle(fontSize: 12),
                     ),
                     value: _useManualLocation,
-                    activeThumbColor: Colors.teal,
+                    activeColor: Colors.teal,
                     onChanged: (value) {
                       setState(() => _useManualLocation = value);
                     },
@@ -288,7 +288,7 @@ class _NearestHospitalClinicsScreenState
               Column(
                 children: [
                   DropdownButtonFormField<String>(
-                    initialValue: _locationType,
+                    value: _locationType,
                     decoration: const InputDecoration(
                       labelText: 'Search By',
                       border: OutlineInputBorder(),

@@ -159,8 +159,8 @@ class _BloodSugarResultScreenState extends State<BloodSugarResultScreen> {
               if (BloodSugarClassifier.shouldShowAmbulanceButton(result.level))
                 _buildAmbulanceButton(),
 
-              // Find Hospitals button (for medium cases)
-              if (result.level == BloodSugarLevel.orange && !hospitalsFetched)
+              // Find Hospitals button (show for all levels if not already fetched)
+              if (!hospitalsFetched && !isLoadingHospitals)
                 _buildFindHospitalsButton(),
 
               // Loading indicator
@@ -287,12 +287,22 @@ class _BloodSugarResultScreenState extends State<BloodSugarResultScreen> {
   }
 
   Widget _buildFindHospitalsButton() {
+    // Use appropriate color based on sugar level
+    Color buttonColor;
+    if (result.level == BloodSugarLevel.red) {
+      buttonColor = Colors.red.shade600;
+    } else if (result.level == BloodSugarLevel.orange) {
+      buttonColor = Colors.orange.shade600;
+    } else {
+      buttonColor = Colors.blue.shade600; // Normal/info color
+    }
+
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       child: ElevatedButton.icon(
         onPressed: _fetchHospitals,
         style: ElevatedButton.styleFrom(
-          backgroundColor: Colors.orange.shade600,
+          backgroundColor: buttonColor,
           foregroundColor: Colors.white,
           padding: const EdgeInsets.symmetric(vertical: 16),
           shape: RoundedRectangleBorder(

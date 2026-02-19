@@ -17,8 +17,14 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   int _selectedIndex = 0;
 
-  final List<Widget> _screens = [
-    const ChatScreen(),
+  void _changeTab(int index) {
+    setState(() {
+      _selectedIndex = index;
+    });
+  }
+
+  List<Widget> get _screens => [
+    ChatScreen(onNavigateToTab: _changeTab),
     const VitalsScreen(),
     const HistoryScreen(),
     const SchemesScreen(),

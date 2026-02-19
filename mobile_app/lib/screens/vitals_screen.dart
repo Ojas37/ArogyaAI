@@ -6,6 +6,7 @@ import 'bp_check_screen.dart';
 import 'heart_rate_check_screen.dart';
 import 'spo2_check_screen.dart';
 import 'temperature_check_screen.dart';
+import 'nearest_hospital_clinics_screen.dart';
 
 class VitalsScreen extends StatefulWidget {
   const VitalsScreen({super.key});
@@ -200,6 +201,49 @@ class _VitalsScreenState extends State<VitalsScreen> {
                       context,
                       MaterialPageRoute(
                         builder: (context) => const HeartRateCheckScreen(),
+                      ),
+                    );
+                  },
+                ),
+
+                const SizedBox(height: 32),
+
+                // Nearby Hospitals & Clinics section
+                Row(
+                  children: [
+                    Container(
+                      height: 2,
+                      width: 40,
+                      color: Colors.green,
+                    ),
+                    const SizedBox(width: 12),
+                    const Text(
+                      'Medical Facilities',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.black87,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 20),
+
+                // Find Nearby Hospitals & Clinics button
+                _buildHealthCheckButton(
+                  languageProvider: languageProvider,
+                  title: 'Find Nearby Hospitals & Clinics',
+                  subtitle: 'Locate medical facilities near you',
+                  icon: Icons.local_hospital,
+                  gradientColors: [
+                    Colors.green.shade400,
+                    Colors.green.shade600
+                  ],
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const NearestHospitalClinicsScreen(),
                       ),
                     );
                   },

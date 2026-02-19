@@ -16,23 +16,24 @@ class BPResultsScreen extends StatefulWidget {
 
 class _BPResultsScreenState extends State<BPResultsScreen> {
   List<MedicalFacility>? _facilities;
-  bool _isLoading = true;
+  bool _isLoading = false;
   String? _error;
+  bool _facilitiesLoaded = false;
 
-  bool get _shouldShowHospitals => widget.result.level != BPLevel.green;
   bool get _isEmergency => widget.result.level == BPLevel.red;
 
   @override
   void initState() {
     super.initState();
-    if (_shouldShowHospitals) {
+    // Auto-load for emergency cases only
+    if (_isEmergency) {
       _loadFacilities();
-    } else {
-      _isLoading = false;
     }
   }
 
   Future<void> _loadFacilities() async {
+    if (_facilitiesLoaded) return;
+    
     setState(() {
       _isLoading = true;
       _error = null;
@@ -52,6 +53,7 @@ class _BPResultsScreenState extends State<BPResultsScreen> {
         setState(() {
           _facilities = filtered;
           _isLoading = false;
+          _facilitiesLoaded = true;
         });
       }
     } catch (e) {
@@ -112,12 +114,11 @@ class _BPResultsScreenState extends State<BPResultsScreen> {
             _buildResultHeader(),
             const SizedBox(height: 16),
             _buildMessageCard(),
-            if (_shouldShowHospitals) ...[
-              const SizedBox(height: 16),
-              _buildHelplineButton(),
-              const SizedBox(height: 16),
-              _buildFacilitiesSection(),
-            ],
+            const SizedBox(height: 16),
+            if (_isEmergency) _buildHelplineButton(),
+            if (_isEmergency) const SizedBox(height: 16),
+            if (!_facilitiesLoaded && !_isLoading) _buildFindHospitalsButton(),
+            if (_isLoading || _facilities != null) _buildFacilitiesSection(),
             const SizedBox(height: 16),
             _buildDisclaimer(),
           ],
@@ -221,6 +222,33 @@ class _BPResultsScreenState extends State<BPResultsScreen> {
       ),
       icon: Icon(_isEmergency ? Icons.emergency : Icons.phone_in_talk),
       label: Text(_isEmergency ? 'Call Ambulance (102)' : 'Call Health Helpline (102)'),
+    );
+  }
+
+  Widget _buildFindHospitalsButton() {
+    // Use appropriate color based on BP level
+    Color buttonColor;
+    if (widget.result.level == BPLevel.red) {
+      buttonColor = Colors.red.shade600;
+    } else if (widget.result.level == BPLevel.yellow) {
+      buttonColor = Colors.orange.shade600;
+    } else {
+      buttonColor = Colors.blue.shade600; // Normal/green level
+    }
+
+    return ElevatedButton.icon(
+      onPressed: _loadFacilities,
+      style: ElevatedButton.styleFrom(
+        backgroundColor: buttonColor,
+        foregroundColor: Colors.white,
+        padding: const EdgeInsets.symmetric(vertical: 16),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+      icon: const Icon(Icons.local_hospital, size: 24),
+      label: const Text(
+        'Find Nearby Hospitals',
+        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+      ),
     );
   }
 

@@ -11,7 +11,9 @@ import 'result_screen.dart';
 import 'vitals_screen.dart';
 
 class ChatScreen extends StatefulWidget {
-  const ChatScreen({super.key});
+  final Function(int)? onNavigateToTab;
+  
+  const ChatScreen({super.key, this.onNavigateToTab});
 
   @override
   State<ChatScreen> createState() => _ChatScreenState();
@@ -381,12 +383,8 @@ class _ChatScreenState extends State<ChatScreen> {
             title: const Text('Government Schemes'),
             onTap: () {
               Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Government Schemes feature coming soon!'),
-                  duration: Duration(seconds: 2),
-                ),
-              );
+              // Navigate to Schemes tab (index 3)
+              widget.onNavigateToTab?.call(3);
             },
           ),
           ListTile(

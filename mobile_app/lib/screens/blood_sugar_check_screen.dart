@@ -444,7 +444,6 @@ class _BloodSugarCheckScreenState extends State<BloodSugarCheckScreen> {
                         style: const TextStyle(fontSize: 12),
                       ),
                       value: _useManualLocation,
-                      activeThumbColor: Colors.teal,
                       onChanged: (value) {
                         setState(() => _useManualLocation = value);
                       },
@@ -534,7 +533,7 @@ class _BloodSugarCheckScreenState extends State<BloodSugarCheckScreen> {
                   children: [
                     // Location type dropdown
                     DropdownButtonFormField<String>(
-                      initialValue: _locationType,
+                      value: _locationType,
                       decoration: InputDecoration(
                         labelText: languageProvider.t('bloodSugar.searchBy'),
                         border: const OutlineInputBorder(),

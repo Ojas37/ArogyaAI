@@ -518,7 +518,6 @@ class _TemperatureCheckScreenState extends State<TemperatureCheckScreen> {
                         style: const TextStyle(fontSize: 12),
                       ),
                       value: _useManualLocation,
-                      activeThumbColor: Colors.teal,
                       onChanged: (value) {
                         setState(() => _useManualLocation = value);
                       },

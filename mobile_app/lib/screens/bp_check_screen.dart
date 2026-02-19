@@ -489,7 +489,6 @@ class _BPCheckScreenState extends State<BPCheckScreen> {
                         style: const TextStyle(fontSize: 12),
                       ),
                       value: _useManualLocation,
-                      activeThumbColor: Colors.teal,
                       onChanged: (value) {
                         setState(() => _useManualLocation = value);
                       },
