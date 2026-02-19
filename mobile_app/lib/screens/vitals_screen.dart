@@ -3,7 +3,6 @@ import 'package:provider/provider.dart';
 import '../providers/language_provider.dart';
 import 'blood_sugar_check_screen.dart';
 import 'bp_check_screen.dart';
-import 'cholesterol_check_screen.dart';
 import 'heart_rate_check_screen.dart';
 import 'spo2_check_screen.dart';
 import 'temperature_check_screen.dart';
@@ -206,24 +205,6 @@ class _VitalsScreenState extends State<VitalsScreen> {
                   },
                 ),
 
-                const SizedBox(height: 16),
-
-                // Cholesterol Check
-                _buildHealthCheckButton(
-                  languageProvider: languageProvider,
-                  title: languageProvider.t('vitals.cholesterol'),
-                  subtitle: languageProvider.t('vitals.cholesterolSubtitle'),
-                  icon: Icons.science,
-                  gradientColors: [Colors.teal.shade400, Colors.teal.shade600],
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => const CholesterolCheckScreen(),
-                      ),
-                    );
-                  },
-                ),
                 const SizedBox(height: 20),
               ],
             ),

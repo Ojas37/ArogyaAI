@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:provider/provider.dart';
 import '../models/blood_sugar_reading.dart';
-import '../models/medical_facility.dart';
+import '../models/hospital.dart';
 import '../services/blood_sugar_classifier.dart';
-import '../services/overpass_service.dart';
+import '../services/hospital_finder_service.dart';
 import '../providers/language_provider.dart';
 
 class BloodSugarResultsScreen extends StatefulWidget {
@@ -25,43 +25,53 @@ class BloodSugarResultsScreen extends StatefulWidget {
 }
 
 class _BloodSugarResultsScreenState extends State<BloodSugarResultsScreen> {
-  List<MedicalFacility>? _facilities;
-  bool _isLoading = true;
-  String? _error;
+  List<Hospital> hospitals = [];
+  bool isLoadingHospitals = false;
+  String? errorMessage;
+  bool hospitalsFetched = false;
 
   @override
   void initState() {
     super.initState();
-    _loadFacilities();
+    
+    // Auto-fetch hospitals for emergency cases
+    if (BloodSugarClassifier.shouldAutoFetchHospitals(widget.reading.level)) {
+      _fetchHospitals();
+    }
   }
 
-  Future<void> _loadFacilities() async {
+  Future<void> _fetchHospitals() async {
+    if (hospitalsFetched) return;
+
     setState(() {
-      _isLoading = true;
-      _error = null;
+      isLoadingHospitals = true;
+      errorMessage = null;
     });
 
     try {
-      final facilities = await OverpassService.searchNearbyFacilities(
+      final fetchedHospitals = await HospitalFinderService.findNearbyHospitals(
         latitude: widget.latitude,
         longitude: widget.longitude,
-        facilityType: widget.reading.facilityType,
-        limit: 5,
+        radiusKm: 10.0,  // 10 km radius
+        maxResults: 5,    // Top 5 hospitals
       );
 
-      if (mounted) {
+      setState(() {
+        hospitals = fetchedHospitals;
+        isLoadingHospitals = false;
+        hospitalsFetched = true;
+      });
+
+      if (hospitals.isEmpty) {
         setState(() {
-          _facilities = facilities;
-          _isLoading = false;
+          errorMessage = 'No hospitals found within 10 km radius.';
         });
       }
     } catch (e) {
-      if (mounted) {
-        setState(() {
-          _error = e.toString();
-          _isLoading = false;
-        });
-      }
+      setState(() {
+        isLoadingHospitals = false;
+        errorMessage = e.toString();
+      });
     }
   }
 
@@ -85,22 +95,20 @@ class _BloodSugarResultsScreenState extends State<BloodSugarResultsScreen> {
     }
   }
 
-  Future<void> _openInMaps(MedicalFacility facility, {bool startNavigation = false}) async {
-    String url;
-    
+  Future<void> _openInMaps(Hospital hospital, {bool startNavigation = false}) async {
+    final String url;
+
     if (startNavigation) {
-      // Open with directions from current location
-      url = facility.getDirectionsUrl(
-        originLat: widget.latitude,
-        originLng: widget.longitude,
-      );
+      final origin = '${widget.latitude},${widget.longitude}';
+      final destination = '${hospital.latitude},${hospital.longitude}';
+      url = 'https://www.google.com/maps/dir/?api=1&origin=$origin&destination=$destination&travelmode=driving';
     } else {
-      // Just show the location
-      url = facility.googleMapsUrl;
+      final encodedQuery = Uri.encodeComponent('${hospital.name} ${hospital.address}');
+      url = 'https://www.google.com/maps/search/?api=1&query=$encodedQuery';
     }
-    
+
     final uri = Uri.parse(url);
-    
+
     if (await canLaunchUrl(uri)) {
       await launchUrl(uri, mode: LaunchMode.externalApplication);
     } else {
@@ -173,7 +181,7 @@ class _BloodSugarResultsScreenState extends State<BloodSugarResultsScreen> {
   Widget _buildStatusHeader() {
     return Container(
       padding: const EdgeInsets.all(24),
-      color: _getLevelColor().withOpacity(0.1),
+      color: _getLevelColor().withValues(alpha: 0.1),
       child: Column(
         children: [
           Icon(
@@ -294,7 +302,13 @@ class _BloodSugarResultsScreenState extends State<BloodSugarResultsScreen> {
 
   Widget _buildFacilitiesList() {
     final languageProvider = Provider.of<LanguageProvider>(context);
-    
+    final shouldShowHospitals =
+        BloodSugarClassifier.shouldShowHospitals(widget.reading.level);
+
+    if (!shouldShowHospitals) {
+      return const SizedBox.shrink();
+    }
+
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16),
       child: Column(
@@ -308,39 +322,62 @@ class _BloodSugarResultsScreenState extends State<BloodSugarResultsScreen> {
             ),
           ),
           const SizedBox(height: 12),
-          
-          if (_isLoading)
+          if (isLoadingHospitals)
             const Center(
               child: Padding(
                 padding: EdgeInsets.all(32),
                 child: CircularProgressIndicator(),
               ),
             )
-          else if (_error != null)
+          else if (errorMessage != null)
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
                 color: Colors.red.shade50,
                 borderRadius: BorderRadius.circular(8),
               ),
-              child: Row(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Icon(Icons.error_outline, color: Colors.red),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      languageProvider.t('bloodSugarResults.couldNotLoadFacilities', params: {'error': _error!}),
-                      style: const TextStyle(color: Colors.red),
-                    ),
+                  Row(
+                    children: [
+                      const Icon(Icons.error_outline, color: Colors.red),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          languageProvider.t(
+                            'bloodSugarResults.couldNotLoadFacilities',
+                            params: {'error': errorMessage!},
+                          ),
+                          style: const TextStyle(color: Colors.red),
+                        ),
+                      ),
+                    ],
                   ),
-                  IconButton(
-                    icon: const Icon(Icons.refresh),
-                    onPressed: _loadFacilities,
+                  const SizedBox(height: 12),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: ElevatedButton.icon(
+                      onPressed: _fetchHospitals,
+                      icon: const Icon(Icons.refresh),
+                      label: Text(languageProvider.t('common.retry')),
+                    ),
                   ),
                 ],
               ),
             )
-          else if (_facilities == null || _facilities!.isEmpty)
+          else if (!hospitalsFetched)
+            ElevatedButton.icon(
+              onPressed: _fetchHospitals,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.orange.shade600,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+              ),
+              icon: const Icon(Icons.local_hospital),
+              label: Text(languageProvider.t('bloodSugarResults.nearbyFacilities')),
+            )
+          else if (hospitals.isEmpty)
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
@@ -363,9 +400,9 @@ class _BloodSugarResultsScreenState extends State<BloodSugarResultsScreen> {
             ListView.builder(
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
-              itemCount: _facilities!.length,
+              itemCount: hospitals.length,
               itemBuilder: (context, index) {
-                return _buildFacilityCard(_facilities![index]);
+                return _buildFacilityCard(hospitals[index]);
               },
             ),
         ],
@@ -373,7 +410,7 @@ class _BloodSugarResultsScreenState extends State<BloodSugarResultsScreen> {
     );
   }
 
-  Widget _buildFacilityCard(MedicalFacility facility) {
+  Widget _buildFacilityCard(Hospital hospital) {
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       child: Padding(
@@ -383,67 +420,73 @@ class _BloodSugarResultsScreenState extends State<BloodSugarResultsScreen> {
           children: [
             Row(
               children: [
-                Icon(
-                  _getFacilityIcon(facility.type),
-                  color: Colors.teal,
-                  size: 32,
-                ),
+                const Icon(Icons.local_hospital, color: Colors.teal, size: 32),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        facility.name,
+                        hospital.name,
                         style: const TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
-                      if (facility.distanceInKm != null)
-                        Builder(
-                          builder: (context) {
-                            final languageProvider = Provider.of<LanguageProvider>(context);
-                            return Text(
-                              languageProvider.t(
-                                'bloodSugarResults.kmAway',
-                                params: {'distance': facility.distanceInKm!.toStringAsFixed(1)},
-                              ),
-                              style: TextStyle(
-                                color: Colors.grey.shade600,
-                                fontSize: 14,
-                              ),
-                            );
-                          },
+                      Builder(
+                        builder: (context) {
+                          final languageProvider =
+                              Provider.of<LanguageProvider>(context);
+                          return Text(
+                            languageProvider.t(
+                              'bloodSugarResults.kmAway',
+                              params: {'distance': hospital.distance.toStringAsFixed(1)},
+                            ),
+                            style: TextStyle(
+                              color: Colors.grey.shade600,
+                              fontSize: 14,
+                            ),
+                          );
+                        },
+                      ),
+                      if (hospital.rating != null)
+                        Row(
+                          children: [
+                            const Icon(Icons.star, color: Colors.orange, size: 16),
+                            const SizedBox(width: 4),
+                            Text(
+                              '${hospital.rating!.toStringAsFixed(1)} (${hospital.userRatingsTotal ?? 0})',
+                              style: TextStyle(color: Colors.grey.shade700, fontSize: 12),
+                            ),
+                          ],
                         ),
                     ],
                   ),
                 ),
               ],
             ),
-            if (facility.address != null) ...[
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  const Icon(Icons.location_on, size: 16, color: Colors.grey),
-                  const SizedBox(width: 4),
-                  Expanded(
-                    child: Text(
-                      facility.address!,
-                      style: const TextStyle(fontSize: 12, color: Colors.grey),
-                    ),
+            const SizedBox(height: 8),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Icon(Icons.location_on, size: 16, color: Colors.grey),
+                const SizedBox(width: 4),
+                Expanded(
+                  child: Text(
+                    hospital.address,
+                    style: const TextStyle(fontSize: 12, color: Colors.grey),
                   ),
-                ],
-              ),
-            ],
-            if (facility.phone != null) ...[
-              const SizedBox(height: 4),
+                ),
+              ],
+            ),
+            if (hospital.phoneNumber != null && hospital.phoneNumber!.isNotEmpty) ...[
+              const SizedBox(height: 6),
               Row(
                 children: [
                   const Icon(Icons.phone, size: 16, color: Colors.grey),
                   const SizedBox(width: 4),
                   Text(
-                    facility.phone!,
+                    hospital.phoneNumber!,
                     style: const TextStyle(fontSize: 12, color: Colors.grey),
                   ),
                 ],
@@ -457,7 +500,7 @@ class _BloodSugarResultsScreenState extends State<BloodSugarResultsScreen> {
                   children: [
                     Expanded(
                       child: ElevatedButton.icon(
-                        onPressed: () => _openInMaps(facility, startNavigation: false),
+                        onPressed: () => _openInMaps(hospital, startNavigation: false),
                         icon: const Icon(Icons.location_on, size: 18),
                         label: Text(languageProvider.t('bloodSugarResults.view')),
                         style: ElevatedButton.styleFrom(
@@ -471,7 +514,7 @@ class _BloodSugarResultsScreenState extends State<BloodSugarResultsScreen> {
                     Expanded(
                       flex: 2,
                       child: ElevatedButton.icon(
-                        onPressed: () => _openInMaps(facility, startNavigation: true),
+                        onPressed: () => _openInMaps(hospital, startNavigation: true),
                         icon: const Icon(Icons.directions, size: 18),
                         label: Text(languageProvider.t('bloodSugarResults.startNavigation')),
                         style: ElevatedButton.styleFrom(
@@ -489,19 +532,6 @@ class _BloodSugarResultsScreenState extends State<BloodSugarResultsScreen> {
         ),
       ),
     );
-  }
-
-  IconData _getFacilityIcon(String type) {
-    switch (type.toLowerCase()) {
-      case 'hospital':
-        return Icons.local_hospital;
-      case 'clinic':
-        return Icons.medical_services;
-      case 'pharmacy':
-        return Icons.medication;
-      default:
-        return Icons.business;
-    }
   }
 
   Widget _buildDisclaimer() {

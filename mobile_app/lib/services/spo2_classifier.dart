@@ -1,47 +1,58 @@
-enum SpO2Level { green, yellow, red }
+import 'package:flutter/material.dart';
+import '../models/spo2_reading.dart';
 
-enum SpO2Symptom {
-  shortnessOfBreath,
-  rapidBreathing,
-  chestPain,
-  confusion,
-  blueLips,
-  dizziness,
-  fatigue,
-  weakness,
-  none,
-}
+class Spo2Classifier {
+  static Spo2Reading classifySpo2(int spo2, Set<Spo2Symptom> symptoms) {
+    String category = getOxygenCategory(spo2, symptoms);
+    Color color;
+    String title;
+    String message;
+    IconData icon;
 
-class SpO2Classifier {
-  static SpO2Level classify(double spo2) {
+    switch (category) {
+      case 'Emergency':
+        color = Colors.red.shade700;
+        title = 'MEDICAL EMERGENCY';
+        message =
+            'Critical oxygen level detected. Seek immediate medical attention.';
+        icon = Icons.emergency;
+        break;
+      case 'Medium':
+        color = Colors.orange.shade700;
+        title = 'Low Oxygen Level';
+        message = 'Your oxygen level is slightly low. Please consult a doctor.';
+        icon = Icons.warning;
+        break;
+      default: // Normal
+        color = Colors.green.shade700;
+        title = 'Normal SpO₂';
+        message = 'Your oxygen saturation is within the normal range.';
+        icon = Icons.check_circle;
+    }
+
+    return Spo2Reading(
+      spo2: spo2,
+      category: category,
+      color: color,
+      title: title,
+      message: message,
+      icon: icon,
+    );
+  }
+
+  static String getOxygenCategory(int spo2, Set<Spo2Symptom> symptoms) {
+    final hasSevereSymptom = symptoms.any((s) =>
+        s == Spo2Symptom.chestPain ||
+        s == Spo2Symptom.blueLips ||
+        s == Spo2Symptom.confusion);
+
     if (spo2 < 90) {
-      return SpO2Level.red;
-    } else if (spo2 < 95) {
-      return SpO2Level.yellow;
-    } else {
-      return SpO2Level.green;
+      return 'Emergency';
     }
-  }
-
-  static String statusLabel(SpO2Level level) {
-    switch (level) {
-      case SpO2Level.green:
-        return 'Normal';
-      case SpO2Level.yellow:
-        return 'Low';
-      case SpO2Level.red:
-        return 'Critical';
+    if (spo2 >= 90 && spo2 <= 94) {
+      return hasSevereSymptom ? 'Emergency' : 'Medium';
     }
-  }
-
-  static String advice(SpO2Level level) {
-    switch (level) {
-      case SpO2Level.green:
-        return 'Oxygen saturation is normal.';
-      case SpO2Level.yellow:
-        return 'Low SpO2. Monitor and consult a doctor.';
-      case SpO2Level.red:
-        return 'Critical SpO2! Seek medical attention.';
-    }
+    // 95 to 100
+    return 'Normal';
   }
 }
