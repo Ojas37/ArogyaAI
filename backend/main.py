@@ -7,6 +7,15 @@ import uvicorn
 from language_detector import LanguageDetector
 from intent_classifier import IntentClassifier
 
+# Import the integrated pipeline
+try:
+    from pipeline_orchestrator import HealthcareTriagePipeline
+    pipeline = HealthcareTriagePipeline()
+    print("✅ Complete pipeline initialized successfully")
+except Exception as e:
+    print(f"⚠️  Pipeline initialization failed: {e}")
+    pipeline = None
+
 app = FastAPI(
     title="ArogyaAI Healthcare API",
     description="AI-powered symptom checker and triage system",
@@ -28,6 +37,7 @@ try:
 except Exception as e:
     print(f"⚠️  Intent classifier initialization failed: {e}")
     intent_classifier = None
+
 
 # CORS middleware - allow mobile app to call API
 app.add_middleware(
@@ -89,6 +99,10 @@ async def root():
             "/api/v1/symptom/analyze",
             "/api/v1/language/detect",
             "/api/v1/intent/classify",
+            "/api/v1/guidance/generate",
+            "/api/v1/guidance/emergency-contacts",
+            "/api/v1/session/clear",
+            "/api/v1/session/clear-all",
             "/api/v1/health",
             "/docs"
         ]
@@ -107,74 +121,194 @@ async def health_check():
 @app.post("/api/v1/symptom/analyze", response_model=TriageResult)
 async def analyze_symptoms(report: SymptomReport):
     """
-    Analyze symptoms and return triage recommendation
+    Analyze symptoms and return triage recommendation using COMPLETE INTEGRATED PIPELINE
     
-    This is the main endpoint that:
-    1. Translates input to English (if needed)
-    2. Extracts symptoms using NLP
-    3. Runs rule-based red-flag detection
-    4. Runs ML-based urgency classification
-    5. Combines results (hybrid approach)
-    6. Returns actionable recommendations
+    This endpoint:
+    1. Detects language
+    2. Translates to English (if needed)
+    3. Classifies intent
+    4. Extracts symptoms using Medical NER
+    5. Runs triage classification (XGBoost + emergency overrides)
+    6. Generates multilingual guidance
+    7. Translates response back
+    8. Returns actionable recommendations with safety constraints
     """
     
+    print(f"\n{'='*80}")
+    print(f"📨 NEW REQUEST - User: {report.userId}, Input: '{report.textInput}'")
+    print(f"{'='*80}")
+    
     try:
-        # TODO: Implement actual logic (Week 2-3)
-        # For now, return mock response
+        if pipeline is None:
+            # Fallback to simple rule-based if pipeline not loaded
+            return _fallback_triage(report.textInput)
         
-        # Mock red-flag detection
-        emergency_keywords = ['chest pain', 'difficulty breathing', 'unconscious']
-        is_emergency = any(keyword in report.textInput.lower() for keyword in emergency_keywords)
+        # Process through complete pipeline
+        result = pipeline.process_message(
+            user_input=report.textInput,
+            session_id=report.userId,
+            force_language=report.language if report.language else None
+        )
         
-        if is_emergency:
-            return TriageResult(
-                urgencyLevel="emergency",
-                recommendation="Seek immediate medical attention. Call emergency services.",
-                explanation="Your symptoms indicate a potentially serious condition requiring urgent care.",
-                confidence=0.95,
-                redFlags=["chest pain detected", "breathing difficulty"],
-                nextSteps=[
-                    "Call emergency services (108)",
-                    "Do not drive yourself",
-                    "Stay calm and sit down"
-                ]
-            )
+        # Handle errors
+        if result.get('error'):
+            raise HTTPException(status_code=500, detail=result.get('message', 'Processing error'))
         
-        # Check for doctor visit
-        doctor_keywords = ['fever', 'persistent', 'severe']
-        needs_doctor = any(keyword in report.textInput.lower() for keyword in doctor_keywords)
+        # ✅ NEW: Check mode field to determine response type
+        mode = result.get('mode', 'chat')
+        print(f"🔍 MAIN.PY: mode={mode}, response_type={result.get('response_type')}, response_text={result.get('response_text', '')[:50]}...")
         
-        if needs_doctor:
-            return TriageResult(
-                urgencyLevel="doctor",
-                recommendation="Visit a doctor within 24-48 hours.",
-                explanation="Your symptoms suggest you should consult a healthcare professional.",
-                confidence=0.80,
-                redFlags=[],
-                nextSteps=[
-                    "Schedule a doctor appointment",
-                    "Monitor symptoms",
-                    "Rest and stay hydrated"
-                ]
-            )
+        # Chat mode: follow-up questions or informational
+        if mode == 'chat':
+            if result.get('response_type') == 'followup':
+                print(f"✅ RETURNING FOLLOWUP QUESTION")
+                return TriageResult(
+                    urgencyLevel="clarification",
+                    recommendation=result.get('response_text', ''),
+                    explanation="I need more information to provide accurate guidance.",
+                    confidence=0.5,
+                    redFlags=[],
+                    nextSteps=["Please provide more details about your symptoms"]
+                )
+            
+            # Informational responses (greetings, etc.)
+            if result.get('response_type') == 'informational':
+                return TriageResult(
+                    urgencyLevel="info",
+                    recommendation=result.get('response_text', ''),
+                    explanation=result.get('response_text', ''),
+                    confidence=1.0,
+                    redFlags=[],
+                    nextSteps=[]
+                )
         
-        # Default: self-care
+        # ✅ FINAL TRIAGE mode: Show classification result
+        if mode == 'final_triage' or result.get('response_type') == 'final':
+            # Map triage levels
+            urgency_map = {
+                'EMERGENCY': 'emergency',
+                'URGENT': 'doctor',
+                'SELF_CARE': 'self-care'
+            }
+            urgency = urgency_map.get(result.get('triage_level'), 'self-care')
+        
+        # Extract red flags (emergency symptoms)
+        red_flags = []
+        if result.get('triage_level') == 'EMERGENCY':
+            red_flags = [f"Critical: {symptom}" for symptom in result.get('extracted_symptoms', [])]
+        
+        # Return complete response
         return TriageResult(
-            urgencyLevel="self-care",
-            recommendation="Monitor symptoms and practice self-care.",
-            explanation="Your symptoms can likely be managed at home with rest and care.",
-            confidence=0.75,
-            redFlags=[],
-            nextSteps=[
-                "Get adequate rest",
-                "Stay hydrated",
-                "Monitor for worsening symptoms",
-                "Seek care if symptoms persist beyond 3 days"
-            ]
+            urgencyLevel=urgency,
+            recommendation=result.get('response_text', ''),
+            explanation=result.get('response_text', ''),
+            confidence=result.get('confidence', 0.0),
+            redFlags=red_flags,
+            nextSteps=result.get('actions', [])[:5]  # Top 5 actions
         )
         
     except Exception as e:
+        print(f"❌ Error in symptom analysis: {e}")
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Error analyzing symptoms: {str(e)}")
+
+
+def _fallback_triage(text: str) -> TriageResult:
+    """Fallback rule-based triage if pipeline fails"""
+    emergency_keywords = ['chest pain', 'difficulty breathing', 'unconscious', 'severe bleeding']
+    is_emergency = any(keyword in text.lower() for keyword in emergency_keywords)
+    
+    if is_emergency:
+        return TriageResult(
+            urgencyLevel="emergency",
+            recommendation="⚠️ EMERGENCY: Seek immediate medical attention! Call emergency services (108).",
+            explanation="Your symptoms indicate a potentially serious condition requiring urgent care.",
+            confidence=0.95,
+            redFlags=["Emergency symptoms detected"],
+            nextSteps=[
+                "Call emergency services (108) immediately",
+                "Do not drive yourself",
+                "Stay calm"
+            ]
+        )
+    
+    doctor_keywords = ['fever', 'persistent', 'severe', 'pain']
+    needs_doctor = any(keyword in text.lower() for keyword in doctor_keywords)
+    
+    if needs_doctor:
+        return TriageResult(
+            urgencyLevel="doctor",
+            recommendation="🏥 Please consult a doctor within 24-48 hours.",
+            explanation="Your symptoms suggest you should see a healthcare professional soon.",
+            confidence=0.75,
+            redFlags=[],
+            nextSteps=[
+                "Schedule a doctor appointment",
+                "Monitor symptoms",
+                "Rest and stay hydrated"
+            ]
+        )
+    
+    return TriageResult(
+        urgencyLevel="self-care",
+        recommendation="🏡 You can manage this at home with self-care.",
+        explanation="Your symptoms appear mild. Monitor and seek care if they worsen.",
+        confidence=0.70,
+        redFlags=[],
+        nextSteps=[
+            "Get adequate rest",
+            "Stay hydrated",
+            "Monitor symptoms for 24-48 hours"
+        ]
+    )
+
+# ==================== Session Management ====================
+
+@app.post("/api/v1/session/clear")
+async def clear_session(session_id: str):
+    """
+    Clear backend session history for a specific session ID
+    Use this when starting a new conversation or clearing history
+    """
+    try:
+        if pipeline and hasattr(pipeline, 'conversational_graph'):
+            graph = pipeline.conversational_graph
+            
+            # Clear session state and conversation history
+            if session_id in graph.sessions:
+                del graph.sessions[session_id]
+            if session_id in graph.conversation_history:
+                del graph.conversation_history[session_id]
+            
+            print(f"✅ Cleared backend session: {session_id}")
+            return {"status": "success", "message": f"Session {session_id} cleared"}
+        
+        return {"status": "success", "message": "No active sessions to clear"}
+        
+    except Exception as e:
+        print(f"⚠️ Error clearing session: {e}")
+        return {"status": "error", "message": str(e)}
+
+@app.post("/api/v1/session/clear-all")
+async def clear_all_sessions():
+    """
+    Clear all backend session history
+    Use this for cleanup or testing
+    """
+    try:
+        if pipeline and hasattr(pipeline, 'conversational_graph'):
+            graph = pipeline.conversational_graph
+            graph.sessions.clear()
+            graph.conversation_history.clear()
+            print("✅ Cleared all backend sessions")
+            return {"status": "success", "message": "All sessions cleared"}
+        
+        return {"status": "success", "message": "No active sessions to clear"}
+        
+    except Exception as e:
+        print(f"⚠️ Error clearing sessions: {e}")
+        return {"status": "error", "message": str(e)}
 
 # ==================== Additional Endpoints ====================
 
@@ -299,6 +433,60 @@ async def analyze_vitals(vitals: Dict[str, float]):
         "flags": flags,
         "status": "critical" if flags else "normal"
     }
+
+# ==================== Guidance Generator Endpoint ====================
+
+class GuidanceRequest(BaseModel):
+    urgencyLevel: str  # "emergency", "doctor", or "self-care"
+    language: str = "en"  # "en", "hi", "mr"
+    symptoms: Optional[List[str]] = None
+    severity: Optional[str] = None
+
+@app.post("/api/v1/guidance/generate")
+async def generate_guidance(request: GuidanceRequest):
+    """
+    Generate guidance and recommendations based on urgency level
+    
+    This endpoint provides template-based advice in the user's language:
+    - Emergency: Immediate actions for critical situations
+    - Doctor: When and how to seek medical care
+    - Self-care: Home remedies and monitoring advice
+    
+    Returns structured guidance with actions, warnings, and emergency contacts
+    """
+    
+    if not guidance_generator:
+        raise HTTPException(status_code=503, detail="Guidance generator not available")
+    
+    try:
+        guidance = guidance_generator.generate_guidance(
+            urgency_level=request.urgencyLevel,
+            language=request.language,
+            symptoms=request.symptoms,
+            severity=request.severity
+        )
+        
+        # Add emergency contacts
+        emergency_contacts = guidance_generator.get_emergency_contacts(request.language)
+        guidance["emergency_contacts"] = emergency_contacts
+        
+        return guidance
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error generating guidance: {str(e)}")
+
+@app.get("/api/v1/guidance/emergency-contacts")
+async def get_emergency_contacts(language: str = "en"):
+    """Get emergency contact numbers for the specified language"""
+    
+    if not guidance_generator:
+        raise HTTPException(status_code=503, detail="Guidance generator not available")
+    
+    try:
+        contacts = guidance_generator.get_emergency_contacts(language)
+        return {"language": language, "contacts": contacts}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error fetching contacts: {str(e)}")
 
 # ==================== Run Server ====================
 

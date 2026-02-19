@@ -12,14 +12,25 @@ shap==0.44.0
 numpy==1.26.0
 pandas==2.1.0
 langdetect==1.0.9
+fasttext==0.9.2
 
-# Transformers for Intent Classification
+# Transformers for Intent Classification & Medical NER
 transformers==4.36.0
 torch==2.1.0
 accelerate==0.25.0
+datasets==2.14.0
+seqeval==1.2.2
+
+# LangChain + LangGraph (conversational flow)
+langchain>=1.2.10
+langgraph>=0.2.35
+langchain-openai>=0.2.0
+langchain-core>=1.2.10
+openai>=1.40.0
 
 # Translation
 deep-translator==1.11.4
+googletrans==4.0.0rc1
 
 # Database
 sqlalchemy==2.0.25

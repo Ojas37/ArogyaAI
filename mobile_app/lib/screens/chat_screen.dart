@@ -26,10 +26,14 @@ class _ChatScreenState extends State<ChatScreen> {
   bool _isDetectingLanguage = false;
   String _lastLanguage = 'en';
   bool _hasRequestedLocation = false;
+  
+  // Generate unique session ID on each app reload for fresh conversations
+  late final String _sessionId = 'session_${DateTime.now().millisecondsSinceEpoch}';
 
   @override
   void initState() {
     super.initState();
+    print('🆕 New chat session started: $_sessionId');
     _addWelcomeMessage();
   }
 
@@ -281,10 +285,10 @@ class _ChatScreenState extends State<ChatScreen> {
 
     _textController.clear();
 
-    // Create symptom report
+    // Create symptom report with unique session ID
     final report = SymptomReport(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
-      userId: 'user123', // TODO: Implement proper auth
+      userId: _sessionId, // Unique session ID per app reload
       language: languageProvider.currentLanguage,
       textInput: text,
       timestamp: DateTime.now(),
@@ -305,17 +309,33 @@ class _ChatScreenState extends State<ChatScreen> {
       _messages.removeLast();
     });
 
-    // Store report temporarily in provider
-    await triageProvider.analyzeSymptoms(report);
+    try {
+      // Call API and get conversational response
+      await triageProvider.analyzeSymptoms(report);
 
-    // Add AI response
-    setState(() {
-      _messages.add(ChatMessage(
-        text: 'I\'ve recorded your symptoms. You can continue chatting or check the results using the Symptom Check button below.',
-        isUser: false,
-        timestamp: DateTime.now(),
-      ));
-    });
+      // Get the conversational response from the API
+      final result = triageProvider.currentResult;
+      final responseText = result?.recommendation ?? 
+        'I\'ve recorded your symptoms. You can continue chatting or check the results using the Symptom Check button below.';
+
+      // Add AI response
+      setState(() {
+        _messages.add(ChatMessage(
+          text: responseText,
+          isUser: false,
+          timestamp: DateTime.now(),
+        ));
+      });
+    } catch (e) {
+      // Show error in chat
+      setState(() {
+        _messages.add(ChatMessage(
+          text: 'Sorry, I encountered an error: ${e.toString()}. Please try again.',
+          isUser: false,
+          timestamp: DateTime.now(),
+        ));
+      });
+    }
   }
 
   Widget _buildDrawer(LanguageProvider languageProvider) {

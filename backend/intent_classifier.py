@@ -2,16 +2,15 @@
 MODEL 2: Intent Classification Model
 
 Purpose: Classify user's intent from their medical queries
-Uses: Hugging Face transformers with pre-trained models
+Uses: Hugging Face transformers with zero-shot classification
 Supports healthcare-specific intents
 
 Intents:
-- symptom_reporting: User is describing symptoms
+- symptom_query: User is describing symptoms
 - emergency: User has an urgent medical situation
-- question: General health question
-- appointment: Wants to book/check appointment
-- medication: Questions about medications
-- follow_up: Following up on previous condition
+- greeting: General greeting
+- thank_you: Thank you message
+- general_query: General health question
 
 Usage:
     from intent_classifier import IntentClassifier
@@ -19,11 +18,10 @@ Usage:
     classifier = IntentClassifier()
     result = classifier.classify("I have severe chest pain")
     print(result)  # {"intent": "emergency", "confidence": 0.95}
-
-Note: This implementation uses facebook/bart-large-mnli for zero-shot classification
-      as a reliable alternative. You can switch to rohannp8/intent_model if it
-      becomes accessible.
 """
+
+import warnings
+warnings.filterwarnings('ignore')
 
 from transformers import pipeline
 from typing import Dict, List
@@ -35,75 +33,37 @@ class IntentClassifier:
     Uses zero-shot classification with a pre-trained model.
     """
     
-    def __init__(self, model_name: str = None):
+    def __init__(self, model_name: str = "facebook/bart-large-mnli"):
         """
         Initialize the intent classifier.
         
         Args:
-            model_name: Hugging Face model identifier (optional)
+            model_name: Hugging Face model identifier
                        Defaults to facebook/bart-large-mnli for zero-shot classification
         """
         
         # Define intent labels
         self.intent_labels = [
-            "symptom_reporting",
+            "symptom_query",
             "emergency",
-            "question", 
-            "appointment",
-            "medication",
-            "follow_up",
-            "general_chat"
+            "greeting", 
+            "thank_you",
+            "general_query"
         ]
         
-        # Define more descriptive labels for zero-shot classification
-        self.intent_descriptions = {
-            "symptom_reporting": "reporting medical symptoms or health issues",
-            "emergency": "urgent medical emergency requiring immediate attention",
-            "question": "asking a general health or medical question",
-            "appointment": "scheduling or booking a doctor appointment",
-            "medication": "asking about medicine dosage or medication information",
-            "follow_up": "following up on previous medical condition or treatment",
-            "general_chat": "casual conversation or greeting"
-        }
+        print(f"🔄 Loading intent classification model: {model_name}...")
         
-        print(f"🔄 Loading intent classification model...")
+        # Load zero-shot classification model
+        self.classifier = pipeline(
+            "zero-shot-classification",
+            model=model_name
+        )
         
-        try:
-            # Use zero-shot classification with a reliable model
-            # This works out of the box without custom training
-            if model_name == "rohannp8/intent_model":
-                # Try the custom model first
-                try:
-                    from transformers import AutoTokenizer, AutoModelForSequenceClassification
-                    import torch
-                    
-                    print(f"   Attempting to load {model_name}...")
-                    self.tokenizer = AutoTokenizer.from_pretrained(model_name, use_fast=False)
-                    self.model = AutoModelForSequenceClassification.from_pretrained(model_name)
-                    self.model.eval()
-                    self.use_zero_shot = False
-                    print("✅ Custom model loaded successfully!")
-                except Exception as e:
-                    print(f"   ⚠️  Could not load custom model: {e}")
-                    print(f"   📝 Falling back to zero-shot classification...")
-                    self.classifier = pipeline("zero-shot-classification", 
-                                             model="facebook/bart-large-mnli")
-                    self.use_zero_shot = True
-            else:
-                # Use zero-shot classification by default
-                self.classifier = pipeline("zero-shot-classification",
-                                         model="facebook/bart-large-mnli") 
-                self.use_zero_shot = True
-            
-            print("✅ Intent classification model ready!")
-            
-        except Exception as e:
-            print(f"⚠️  Error loading intent model: {e}")
-            raise
+        print("✅ Intent classification model ready (ML-based)!")
     
     def classify(self, text: str, top_k: int = 1) -> Dict:
         """
-        Classify the intent of the input text.
+        Classify the intent of the input text using ML model
         
         Args:
             text: Input text to classify
@@ -111,14 +71,6 @@ class IntentClassifier:
             
         Returns:
             dict: Dictionary containing intent and confidence
-            Example: {
-                "intent": "emergency",
-                "confidence": 0.95,
-                "all_predictions": [
-                    {"intent": "emergency", "confidence": 0.95},
-                    {"intent": "symptom_reporting", "confidence": 0.03}
-                ]
-            }
         """
         if not text or not text.strip():
             return {
@@ -128,82 +80,31 @@ class IntentClassifier:
             }
         
         try:
-            if self.use_zero_shot:
-                # Use zero-shot classification
-                result = self.classifier(
-                    text,
-                    list(self.intent_descriptions.values()),
-                    multi_label=False
-                )
-                
-                # Map back to intent names
-                all_predictions = []
-                for label, score in zip(result['labels'], result['scores']):
-                    # Find the intent key that matches this description
-                    intent_name = None
-                    for key, desc in self.intent_descriptions.items():
-                        if desc == label:
-                            intent_name = key
-                            break
-                    
-                    all_predictions.append({
-                        "intent": intent_name or label,
-                        "confidence": round(score, 3)
-                    })
-                
-                # Return top predictions
-                top_predictions = all_predictions[:min(top_k, len(all_predictions))]
-                
-                return {
-                    "intent": top_predictions[0]["intent"],
-                    "confidence": top_predictions[0]["confidence"],
-                    "all_predictions": top_predictions
-                }
-            else:
-                # Use custom model (if rohannp8/intent_model loaded successfully)
-                import torch
-                
-                # Tokenize input
-                inputs = self.tokenizer(
-                    text,
-                    return_tensors="pt",
-                    truncation=True,
-                    max_length=512,
-                    padding=True
-                )
-                
-                # Get predictions
-                with torch.no_grad():
-                    outputs = self.model(**inputs)
-                    logits = outputs.logits
-                    probabilities = torch.softmax(logits, dim=-1)[0]
-                
-                # Get top-k predictions
-                top_probs, top_indices = torch.topk(probabilities, min(top_k, len(self.intent_labels)))
-                
-                all_predictions = []
-                for prob, idx in zip(top_probs, top_indices):
-                    intent_name = self.intent_labels[idx] if idx < len(self.intent_labels) else f"class_{idx}"
-                    all_predictions.append({
-                        "intent": intent_name,
-                        "confidence": round(prob.item(), 3)
-                    })
-                
-                # Return top prediction and all predictions
-                return {
-                    "intent": all_predictions[0]["intent"],
-                    "confidence": all_predictions[0]["confidence"],
-                    "all_predictions": all_predictions
-                }
+            # Use zero-shot classification
+            result = self.classifier(
+                text,
+                self.intent_labels,
+                multi_label=False
+            )
             
-        except Exception as e:
-            print(f"Error classifying intent: {e}")
+            all_predictions = []
+            for label, score in zip(result['labels'], result['scores']):
+                all_predictions.append({
+                    "intent": label,
+                    "confidence": round(score, 3)
+                })
+            
+            top_predictions = all_predictions[:min(top_k, len(all_predictions))]
+            
             return {
-                "intent": "error",
-                "confidence": 0.0,
-                "all_predictions": [],
-                "error": str(e)
+                "intent": top_predictions[0]["intent"],
+                "confidence": top_predictions[0]["confidence"],
+                "all_predictions": top_predictions
             }
+        
+        except Exception as e:
+            print(f"❌ Error in ML classification: {e}")
+            raise
     
     def classify_batch(self, texts: List[str]) -> List[Dict]:
         """

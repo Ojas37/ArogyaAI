@@ -28,13 +28,18 @@ class TriageProvider with ChangeNotifier {
     try {
       if (isOnline) {
         // Online: Use backend API
+        print('📡 Calling backend API for: ${report.textInput}');
         _currentResult = await _apiService.analyzeSymptoms(report);
+        print('✅ API Response received: ${_currentResult?.recommendation}');
       } else {
         // Offline: Use local triage
+        print('📴 Using offline triage');
         _currentResult = _offlineService.analyzeOffline(report);
       }
     } catch (e) {
       _error = e.toString();
+      print('❌ API ERROR: $e');
+      print('🔄 Falling back to offline triage');
       // Fallback to offline if online fails
       _currentResult = _offlineService.analyzeOffline(report);
     } finally {
