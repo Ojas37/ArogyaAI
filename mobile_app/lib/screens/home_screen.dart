@@ -5,6 +5,7 @@ import '../providers/connectivity_provider.dart';
 import 'chat_screen.dart';
 import 'vitals_screen.dart';
 import 'history_screen.dart';
+import 'schemes_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -20,6 +21,7 @@ class _HomeScreenState extends State<HomeScreen> {
     const ChatScreen(),
     const VitalsScreen(),
     const HistoryScreen(),
+    const SchemesScreen(),
   ];
 
   @override
@@ -36,7 +38,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('ArogyaAI Health'),
+        title: Text(languageProvider.t('app.name')),
         actions: [
           // Connectivity indicator
           Padding(
@@ -44,30 +46,32 @@ class _HomeScreenState extends State<HomeScreen> {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
               decoration: BoxDecoration(
-                color: connectivityProvider.isOnline 
-                    ? Colors.green.shade100 
+                color: connectivityProvider.isOnline
+                    ? Colors.green.shade100
                     : Colors.orange.shade100,
                 borderRadius: BorderRadius.circular(20),
               ),
               child: Row(
                 children: [
                   Icon(
-                    connectivityProvider.isOnline 
-                        ? Icons.cloud_done 
+                    connectivityProvider.isOnline
+                        ? Icons.cloud_done
                         : Icons.cloud_off,
                     size: 16,
-                    color: connectivityProvider.isOnline 
-                        ? Colors.green 
+                    color: connectivityProvider.isOnline
+                        ? Colors.green
                         : Colors.orange,
                   ),
                   const SizedBox(width: 4),
                   Text(
-                    connectivityProvider.isOnline ? 'Online' : 'Offline',
+                    connectivityProvider.isOnline
+                        ? languageProvider.t('common.online')
+                        : languageProvider.t('common.offline'),
                     style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.bold,
-                      color: connectivityProvider.isOnline 
-                          ? Colors.green.shade800 
+                      color: connectivityProvider.isOnline
+                          ? Colors.green.shade800
                           : Colors.orange.shade800,
                     ),
                   ),
@@ -82,40 +86,65 @@ class _HomeScreenState extends State<HomeScreen> {
               languageProvider.setLanguage(langCode);
             },
             itemBuilder: (context) => [
-              const PopupMenuItem(value: 'en', child: Text('English')),
-              const PopupMenuItem(value: 'hi', child: Text('हिंदी (Hindi)')),
-              const PopupMenuItem(value: 'te', child: Text('తెలుగు (Telugu)')),
-              const PopupMenuItem(value: 'ta', child: Text('தமிழ் (Tamil)')),
-              const PopupMenuItem(value: 'bn', child: Text('বাংলা (Bengali)')),
-              const PopupMenuItem(value: 'mr', child: Text('मराठी (Marathi)')),
-              const PopupMenuItem(value: 'kn', child: Text('ಕನ್ನಡ (Kannada)')),
-              const PopupMenuItem(value: 'gu', child: Text('ગુજરાતી (Gujarati)')),
-              const PopupMenuItem(value: 'bh', child: Text('भोजपुरी (Bhojpuri)')),
-              const PopupMenuItem(value: 'pa', child: Text('ਪੰਜਾਬੀ (Punjabi)')),
+              PopupMenuItem(
+                  value: 'en',
+                  child: Text(languageProvider.t('language.english'))),
+              PopupMenuItem(
+                  value: 'hi',
+                  child: Text(languageProvider.t('language.hindi'))),
+              PopupMenuItem(
+                  value: 'te',
+                  child: Text(languageProvider.t('language.telugu'))),
+              PopupMenuItem(
+                  value: 'ta',
+                  child: Text(languageProvider.t('language.tamil'))),
+              PopupMenuItem(
+                  value: 'bn',
+                  child: Text(languageProvider.t('language.bengali'))),
+              PopupMenuItem(
+                  value: 'mr',
+                  child: Text(languageProvider.t('language.marathi'))),
+              PopupMenuItem(
+                  value: 'kn',
+                  child: Text(languageProvider.t('language.kannada'))),
+              PopupMenuItem(
+                  value: 'gu',
+                  child: Text(languageProvider.t('language.gujarati'))),
+              PopupMenuItem(
+                  value: 'bh',
+                  child: Text(languageProvider.t('language.bhojpuri'))),
+              PopupMenuItem(
+                  value: 'pa',
+                  child: Text(languageProvider.t('language.punjabi'))),
             ],
           ),
         ],
       ),
       body: _screens[_selectedIndex],
       bottomNavigationBar: BottomNavigationBar(
+        type: BottomNavigationBarType.fixed,
         currentIndex: _selectedIndex,
         onTap: (index) {
           setState(() {
             _selectedIndex = index;
           });
         },
-        items: const [
+        items: [
           BottomNavigationBarItem(
-            icon: Icon(Icons.chat_bubble_outline),
-            label: 'Symptom Check',
+            icon: const Icon(Icons.chat_bubble_outline),
+            label: languageProvider.t('navigation.symptomCheck'),
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.favorite_border),
-            label: 'Vitals',
+            icon: const Icon(Icons.favorite_border),
+            label: languageProvider.t('navigation.vitals'),
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.history),
-            label: 'History',
+            icon: const Icon(Icons.history),
+            label: languageProvider.t('navigation.history'),
+          ),
+          BottomNavigationBarItem(
+            icon: const Icon(Icons.policy_outlined),
+            label: languageProvider.t('navigation.schemes'),
           ),
         ],
       ),

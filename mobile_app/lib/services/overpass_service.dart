@@ -10,42 +10,35 @@ class OverpassService {
   static Future<List<MedicalFacility>> searchNearbyFacilities({
     required double latitude,
     required double longitude,
-    required String facilityType, // hospital, hospital,clinic, pharmacy
+    required String facilityType, // hospital, clinic, pharmacy
     int limit = 5,
+    double radiusMeters = 10000,
   }) async {
     try {
-      // Build Overpass QL query
       final query = _buildOverpassQuery(
         latitude: latitude,
         longitude: longitude,
         facilityType: facilityType,
-        radiusMeters: _radiusMeters,
+        radiusMeters: radiusMeters,
       );
-
-      // Make API request
       final response = await http.post(
         Uri.parse(_baseUrl),
-        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-        body: query,
-      ).timeout(const Duration(seconds: 15));
-
+        body: {'data': query},
+      );
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
-        
-        // Parse response
+        // Parse and filter facilities
         final facilities = _parseOverpassResponse(
           data,
           userLat: latitude,
           userLon: longitude,
         );
-
         // Sort by distance
         facilities.sort((a, b) {
           if (a.distanceInKm == null) return 1;
           if (b.distanceInKm == null) return -1;
           return a.distanceInKm!.compareTo(b.distanceInKm!);
         });
-
         // Return top results
         return facilities.take(limit).toList();
       } else {
@@ -66,10 +59,10 @@ class OverpassService {
   }) {
     // Parse facility types
     final types = facilityType.split(',').map((t) => t.trim()).toList();
-    
+
     // Build query parts for each type
     final queryParts = <String>[];
-    
+
     for (final type in types) {
       String amenity;
       switch (type.toLowerCase()) {
@@ -85,10 +78,12 @@ class OverpassService {
         default:
           amenity = 'hospital';
       }
-      
+
       // Add node and way queries for this amenity type
-      queryParts.add('node["amenity"="$amenity"](around:$radiusMeters,$latitude,$longitude);');
-      queryParts.add('way["amenity"="$amenity"](around:$radiusMeters,$latitude,$longitude);');
+      queryParts.add(
+          'node["amenity"="$amenity"](around:$radiusMeters,$latitude,$longitude);');
+      queryParts.add(
+          'way["amenity"="$amenity"](around:$radiusMeters,$latitude,$longitude);');
     }
 
     // Combine all parts
@@ -117,7 +112,7 @@ out center;
           // Get coordinates
           double? lat;
           double? lon;
-          
+
           if (element['type'] == 'node') {
             lat = element['lat']?.toDouble();
             lon = element['lon']?.toDouble();
@@ -133,10 +128,10 @@ out center;
           if (tags == null) continue;
 
           // Get name (with fallback)
-          final name = tags['name'] ?? 
-                      tags['operator'] ?? 
-                      tags['brand'] ?? 
-                      'Unnamed ${tags['amenity'] ?? 'Facility'}';
+          final name = tags['name'] ??
+              tags['operator'] ??
+              tags['brand'] ??
+              'Unnamed ${tags['amenity'] ?? 'Facility'}';
 
           // Get type
           final type = tags['amenity'] ?? 'unknown';

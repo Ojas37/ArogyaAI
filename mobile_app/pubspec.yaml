@@ -58,6 +58,7 @@ flutter:
     - assets/lottie/
     - assets/rules/
     - assets/translations/
+    - assets/schemes_100_full.json
   
   # fonts:
   #   - family: NotoSans

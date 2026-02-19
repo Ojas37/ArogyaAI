@@ -2,24 +2,24 @@ import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:provider/provider.dart';
 import '../providers/language_provider.dart';
-import '../models/blood_sugar_reading.dart';
-import '../services/blood_sugar_classifier.dart';
+import '../services/bp_classifier.dart';
 import '../services/location_service.dart';
 import '../services/geocoding_service.dart';
-import 'blood_sugar_results_screen.dart';
+import 'bp_results_screen.dart';
 
-class BloodSugarCheckScreen extends StatefulWidget {
-  const BloodSugarCheckScreen({super.key});
+class BPCheckScreen extends StatefulWidget {
+  const BPCheckScreen({super.key});
 
   @override
-  State<BloodSugarCheckScreen> createState() => _BloodSugarCheckScreenState();
+  State<BPCheckScreen> createState() => _BPCheckScreenState();
 }
 
-class _BloodSugarCheckScreenState extends State<BloodSugarCheckScreen> {
+class _BPCheckScreenState extends State<BPCheckScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _sugarController = TextEditingController();
+  final _systolicController = TextEditingController();
+  final _diastolicController = TextEditingController();
   final _placeController = TextEditingController();
-  final Set<BloodSugarSymptom> _selectedSymptoms = {};
+  final Set<BPSymptom> _selectedSymptoms = {};
   bool _isLoading = false;
   bool _isSearchingPlace = false;
   bool _useManualLocation = false;
@@ -31,7 +31,8 @@ class _BloodSugarCheckScreenState extends State<BloodSugarCheckScreen> {
 
   @override
   void dispose() {
-    _sugarController.dispose();
+    _systolicController.dispose();
+    _diastolicController.dispose();
     _placeController.dispose();
     super.dispose();
   }
@@ -54,13 +55,13 @@ class _BloodSugarCheckScreenState extends State<BloodSugarCheckScreen> {
   String _getHintText(LanguageProvider languageProvider) {
     switch (_locationType) {
       case 'City':
-        return languageProvider.t('bloodSugar.hintCity');
+        return languageProvider.t('bloodPressure.hintCity');
       case 'Village':
-        return languageProvider.t('bloodSugar.hintVillage');
+        return languageProvider.t('bloodPressure.hintVillage');
       case 'Pin Code':
-        return languageProvider.t('bloodSugar.hintPinCode');
+        return languageProvider.t('bloodPressure.hintPinCode');
       case 'Taluka':
-        return languageProvider.t('bloodSugar.hintTaluka');
+        return languageProvider.t('bloodPressure.hintTaluka');
       default:
         return languageProvider.t('location.enterLocation');
     }
@@ -69,142 +70,84 @@ class _BloodSugarCheckScreenState extends State<BloodSugarCheckScreen> {
   String _getLocationTip(LanguageProvider languageProvider) {
     switch (_locationType) {
       case 'City':
-        return languageProvider.t('bloodSugar.tipCity');
+        return languageProvider.t('bloodPressure.tipCity');
       case 'Village':
-        return languageProvider.t('bloodSugar.tipVillage');
+        return languageProvider.t('bloodPressure.tipVillage');
       case 'Pin Code':
-        return languageProvider.t('bloodSugar.tipPinCode');
+        return languageProvider.t('bloodPressure.tipPinCode');
       case 'Taluka':
-        return languageProvider.t('bloodSugar.tipTaluka');
+        return languageProvider.t('bloodPressure.tipTaluka');
       default:
         return '';
-    }
-  }
-
-  Future<void> _searchPlace() async {
-    final languageProvider =
-        Provider.of<LanguageProvider>(context, listen: false);
-
-    if (_placeController.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            languageProvider.t(
-              'bloodSugar.enterLocationType',
-              params: {'type': _locationTypeLabel(languageProvider)},
-            ),
-          ),
-          backgroundColor: Colors.orange,
-        ),
-      );
-      return;
-    }
-
-    setState(() => _isSearchingPlace = true);
-
-    try {
-      // Format search query based on location type
-      String searchQuery = _placeController.text;
-      if (_locationType == 'Pin Code') {
-        searchQuery += ', India'; // Add country for better pin code search
-      } else if (_locationType == 'Taluka') {
-        searchQuery += ', Maharashtra, India'; // Add state context for taluka
-      }
-
-      final result = await GeocodingService.searchPlace(searchQuery);
-
-      if (result != null && mounted) {
-        setState(() {
-          _selectedLatitude = result['latitude'];
-          _selectedLongitude = result['longitude'];
-          _selectedPlaceName = result['displayName'];
-        });
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              languageProvider.t(
-                'bloodSugar.locationFound',
-                params: {'name': result['displayName']},
-              ),
-            ),
-            backgroundColor: Colors.green,
-            duration: const Duration(seconds: 3),
-          ),
-        );
-      } else if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(languageProvider.t('bloodSugar.locationNotFound')),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              languageProvider.t(
-                'bloodSugar.errorMessage',
-                params: {'error': e.toString()},
-              ),
-            ),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    } finally {
-      if (mounted) {
-        setState(() => _isSearchingPlace = false);
-      }
     }
   }
 
   Future<void> _getCurrentLocation() async {
     final languageProvider =
         Provider.of<LanguageProvider>(context, listen: false);
+
     setState(() => _isLoading = true);
 
     try {
       // Check if location services are enabled
-      bool serviceEnabled = await LocationService.isLocationServiceEnabled();
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!serviceEnabled) {
         if (mounted) {
-          final shouldOpen = await _showLocationServiceDialog();
-          if (shouldOpen) {
-            await LocationService.openLocationSettings();
+          bool openSettings = await _showLocationServiceDialog();
+          if (openSettings) {
+            await Geolocator.openLocationSettings();
+          }
+        }
+        setState(() => _isLoading = false);
+        return;
+      }
+
+      // Check location permissions
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) {
+          if (mounted) {
+            await _showPermissionDialog();
           }
           setState(() => _isLoading = false);
           return;
         }
       }
 
-      // Get location
-      final position = await LocationService.getCurrentLocationWithTimeout(
-        timeout: const Duration(seconds: 10),
+      if (permission == LocationPermission.deniedForever) {
+        if (mounted) {
+          await _showPermissionDialog();
+        }
+        setState(() => _isLoading = false);
+        return;
+      }
+
+      // Get current position
+      Position position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
       );
 
-      if (position != null && mounted) {
+      if (mounted) {
         setState(() {
           _currentPosition = position;
           _selectedLatitude = position.latitude;
           _selectedLongitude = position.longitude;
+          _selectedPlaceName = 'Current Location';
         });
 
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content:
-                Text(languageProvider.t('bloodSugar.locationAcquiredSuccess')),
+            content: Text(languageProvider.t('bloodPressure.locationAcquiredSuccess')),
             backgroundColor: Colors.green,
             duration: const Duration(seconds: 2),
           ),
         );
       }
-    } catch (e) {
+    }  catch (e) {
       if (mounted) {
         String errorMessage = languageProvider.t(
-          'bloodSugar.locationError',
+          'bloodPressure.locationError',
           params: {'error': e.toString()},
         );
 
@@ -223,6 +166,87 @@ class _BloodSugarCheckScreenState extends State<BloodSugarCheckScreen> {
     }
   }
 
+  Future<void> _searchPlace() async {
+    final languageProvider =
+        Provider.of<LanguageProvider>(context, listen: false);
+
+    if (_placeController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            languageProvider.t(
+              'bloodPressure.enterLocationType',
+              params: {'type': _locationTypeLabel(languageProvider)},
+            ),
+          ),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    setState(() => _isSearchingPlace = true);
+
+    try {
+      // Format search query based on location type
+      String searchQuery = _placeController.text;
+      if (_locationType == 'Pin Code') {
+        searchQuery += ', India';
+      } else if (_locationType == 'Taluka') {
+        searchQuery += ', Maharashtra, India';
+      }
+
+      final result = await GeocodingService.searchPlace(searchQuery);
+
+      if (result != null && mounted) {
+        setState(() {
+          _selectedLatitude = result['latitude'];
+          _selectedLongitude = result['longitude'];
+          _selectedPlaceName = result['displayName'];
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              languageProvider.t(
+                'bloodPressure.locationFound',
+                params: {'name': result['displayName']},
+              ),
+            ),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      } else if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(languageProvider.t('bloodPressure.locationNotFound')),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        String errorMessage = languageProvider.t(
+          'bloodPressure.errorMessage',
+          params: {'error': e.toString()},
+        );
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(errorMessage),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isSearchingPlace = false);
+      }
+    }
+  }
+
   Future<bool> _showLocationServiceDialog() async {
     final languageProvider =
         Provider.of<LanguageProvider>(context, listen: false);
@@ -233,11 +257,11 @@ class _BloodSugarCheckScreenState extends State<BloodSugarCheckScreen> {
               children: [
                 const Icon(Icons.location_off, color: Colors.orange),
                 const SizedBox(width: 8),
-                Text(languageProvider.t('bloodSugar.locationServicesDisabled')),
+                Text(languageProvider.t('bloodPressure.locationServicesDisabled')),
               ],
             ),
             content: Text(
-              languageProvider.t('bloodSugar.locationServicesOff'),
+              languageProvider.t('bloodPressure.locationServicesOff'),
             ),
             actions: [
               TextButton(
@@ -297,8 +321,9 @@ class _BloodSugarCheckScreenState extends State<BloodSugarCheckScreen> {
     setState(() => _isLoading = true);
 
     try {
-      // Parse sugar value
-      final sugarValue = double.parse(_sugarController.text);
+      // Parse BP values
+      final systolic = double.parse(_systolicController.text);
+      final diastolic = double.parse(_diastolicController.text);
 
       // Get location
       double? latitude = _selectedLatitude;
@@ -311,7 +336,7 @@ class _BloodSugarCheckScreenState extends State<BloodSugarCheckScreen> {
             SnackBar(
               content: Text(
                 Provider.of<LanguageProvider>(context, listen: false)
-                    .t('bloodSugar.locationFirst'),
+                    .t('bloodPressure.locationFirst'),
               ),
               backgroundColor: Colors.orange,
             ),
@@ -322,18 +347,15 @@ class _BloodSugarCheckScreenState extends State<BloodSugarCheckScreen> {
       }
 
       // Classify reading
-      final reading = BloodSugarClassifier.classifyReading(
-        sugarValue: sugarValue,
-        symptoms: _selectedSymptoms.toList(),
-      );
+      final result = BPClassifier.evaluate(systolic, diastolic);
 
       // Navigate to results
       if (mounted) {
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (context) => BloodSugarResultsScreen(
-              reading: reading,
+            builder: (context) => BPResultsScreen(
+              result: result,
               latitude: latitude,
               longitude: longitude,
             ),
@@ -346,7 +368,7 @@ class _BloodSugarCheckScreenState extends State<BloodSugarCheckScreen> {
           SnackBar(
             content: Text(
               Provider.of<LanguageProvider>(context, listen: false).t(
-                'bloodSugar.errorMessage',
+                'bloodPressure.errorMessage',
                 params: {'error': e.toString()},
               ),
             ),
@@ -366,7 +388,7 @@ class _BloodSugarCheckScreenState extends State<BloodSugarCheckScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(languageProvider.t('bloodSugar.title')),
+        title: Text(languageProvider.t('bloodPressure.title')),
         backgroundColor: Colors.teal,
       ),
       body: SingleChildScrollView(
@@ -384,35 +406,58 @@ class _BloodSugarCheckScreenState extends State<BloodSugarCheckScreen> {
               ),
               const SizedBox(height: 16),
               Text(
-                languageProvider.t('bloodSugar.header'),
+                languageProvider.t('bloodPressure.header'),
                 style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 8),
               Text(
-                languageProvider.t('bloodSugar.description'),
+                languageProvider.t('bloodPressure.description'),
                 style: const TextStyle(color: Colors.grey),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 32),
 
-              // Sugar value input
+              // Systolic input
               TextFormField(
-                controller: _sugarController,
+                controller: _systolicController,
                 keyboardType: TextInputType.number,
                 decoration: InputDecoration(
-                  labelText: languageProvider.t('bloodSugar.label'),
-                  hintText: languageProvider.t('bloodSugar.hintValue'),
+                  labelText: languageProvider.t('vitalsForm.systolicLabel'),
+                  hintText: languageProvider.t('bloodPressure.hintSystolic'),
                   border: const OutlineInputBorder(),
-                  prefixIcon: const Icon(Icons.medical_information),
+                  prefixIcon: const Icon(Icons.monitor_heart),
                 ),
                 validator: (value) {
                   if (value == null || value.isEmpty) {
-                    return languageProvider.t('bloodSugar.required');
+                    return languageProvider.t('bloodPressure.requiredSystolic');
                   }
-                  final num? sugar = double.tryParse(value);
-                  if (sugar == null || sugar <= 0 || sugar > 1000) {
-                    return languageProvider.t('bloodSugar.invalid');
+                  final num? systolic = double.tryParse(value);
+                  if (systolic == null || systolic <= 0 || systolic > 300) {
+                    return languageProvider.t('bloodPressure.invalidSystolic');
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 16),
+
+              // Diastolic input
+              TextFormField(
+                controller: _diastolicController,
+                keyboardType: TextInputType.number,
+                decoration: InputDecoration(
+                  labelText: languageProvider.t('vitalsForm.diastolicLabel'),
+                  hintText: languageProvider.t('bloodPressure.hintDiastolic'),
+                  border: const OutlineInputBorder(),
+                  prefixIcon: const Icon(Icons.monitor_heart_outlined),
+                ),
+                validator: (value) {
+                  if (value == null || value.isEmpty) {
+                    return languageProvider.t('bloodPressure.requiredDiastolic');
+                  }
+                  final num? diastolic = double.tryParse(value);
+                  if (diastolic == null || diastolic <= 0 || diastolic > 200) {
+                    return languageProvider.t('bloodPressure.invalidDiastolic');
                   }
                   return null;
                 },
@@ -439,7 +484,7 @@ class _BloodSugarCheckScreenState extends State<BloodSugarCheckScreen> {
                       title: Text(languageProvider.t('location.enterManual')),
                       subtitle: Text(
                         _useManualLocation
-                            ? languageProvider.t('bloodSugar.manualEntryMode')
+                            ? languageProvider.t('bloodPressure.manualEntryMode')
                             : languageProvider.t('location.usingGps'),
                         style: const TextStyle(fontSize: 12),
                       ),
@@ -534,9 +579,9 @@ class _BloodSugarCheckScreenState extends State<BloodSugarCheckScreen> {
                   children: [
                     // Location type dropdown
                     DropdownButtonFormField<String>(
-                      initialValue: _locationType,
+                      value: _locationType,
                       decoration: InputDecoration(
-                        labelText: languageProvider.t('bloodSugar.searchBy'),
+                        labelText: languageProvider.t('bloodPressure.searchBy'),
                         border: const OutlineInputBorder(),
                         prefixIcon: const Icon(Icons.map),
                       ),
@@ -642,7 +687,7 @@ class _BloodSugarCheckScreenState extends State<BloodSugarCheckScreen> {
 
               // Symptoms section
               Text(
-                languageProvider.t('bloodSugar.symptomsTitle'),
+                languageProvider.t('bloodPressure.symptomsTitle'),
                 style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 8),
@@ -686,7 +731,7 @@ class _BloodSugarCheckScreenState extends State<BloodSugarCheckScreen> {
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        languageProvider.t('bloodSugar.disclaimer'),
+                        languageProvider.t('bloodPressure.disclaimer'),
                         style: const TextStyle(fontSize: 12),
                       ),
                     ),
@@ -702,15 +747,15 @@ class _BloodSugarCheckScreenState extends State<BloodSugarCheckScreen> {
 
   Widget _buildSymptomChips(LanguageProvider languageProvider) {
     final symptoms = [
-      BloodSugarSymptom.confusion,
-      BloodSugarSymptom.fainting,
-      BloodSugarSymptom.vomiting,
-      BloodSugarSymptom.breathingTrouble,
-      BloodSugarSymptom.excessiveThirst,
-      BloodSugarSymptom.frequentUrination,
-      BloodSugarSymptom.fatigue,
-      BloodSugarSymptom.blurredVision,
-      BloodSugarSymptom.none,
+      BPSymptom.headache,
+      BPSymptom.dizziness,
+      BPSymptom.chestPain,
+      BPSymptom.shortnessOfBreath,
+      BPSymptom.nosebleeds,
+      BPSymptom.visionProblems,
+      BPSymptom.fatigue,
+      BPSymptom.palpitations,
+      BPSymptom.none,
     ];
 
     return Wrap(
@@ -725,7 +770,7 @@ class _BloodSugarCheckScreenState extends State<BloodSugarCheckScreen> {
           selected: isSelected,
           onSelected: (selected) {
             setState(() {
-              if (symptom == BloodSugarSymptom.none) {
+              if (symptom == BPSymptom.none) {
                 // If "None" is selected, clear all others
                 _selectedSymptoms.clear();
                 if (selected) {
@@ -733,7 +778,7 @@ class _BloodSugarCheckScreenState extends State<BloodSugarCheckScreen> {
                 }
               } else {
                 // Remove "None" if selecting other symptoms
-                _selectedSymptoms.remove(BloodSugarSymptom.none);
+                _selectedSymptoms.remove(BPSymptom.none);
                 if (selected) {
                   _selectedSymptoms.add(symptom);
                 } else {
@@ -752,38 +797,34 @@ class _BloodSugarCheckScreenState extends State<BloodSugarCheckScreen> {
   }
 
   String _getSymptomLabel(
-    BloodSugarSymptom symptom,
+    BPSymptom symptom,
     LanguageProvider languageProvider,
   ) {
     switch (symptom) {
-      case BloodSugarSymptom.confusion:
-        return languageProvider.t('bloodSugar.symptom.confusion');
-      case BloodSugarSymptom.fainting:
-        return languageProvider.t('bloodSugar.symptom.fainting');
-      case BloodSugarSymptom.vomiting:
-        return languageProvider.t('bloodSugar.symptom.vomiting');
-      case BloodSugarSymptom.breathingTrouble:
-        return languageProvider.t('bloodSugar.symptom.breathingTrouble');
-      case BloodSugarSymptom.unconscious:
-        return languageProvider.t('bloodSugar.symptom.unconscious');
-      case BloodSugarSymptom.excessiveThirst:
-        return languageProvider.t('bloodSugar.symptom.excessiveThirst');
-      case BloodSugarSymptom.frequentUrination:
-        return languageProvider.t('bloodSugar.symptom.frequentUrination');
-      case BloodSugarSymptom.fatigue:
-        return languageProvider.t('bloodSugar.symptom.fatigue');
-      case BloodSugarSymptom.blurredVision:
-        return languageProvider.t('bloodSugar.symptom.blurredVision');
-      case BloodSugarSymptom.none:
-        return languageProvider.t('bloodSugar.symptom.none');
+      case BPSymptom.headache:
+        return languageProvider.t('bloodPressure.symptom.headache');
+      case BPSymptom.dizziness:
+        return languageProvider.t('bloodPressure.symptom.dizziness');
+      case BPSymptom.chestPain:
+        return languageProvider.t('bloodPressure.symptom.chestPain');
+      case BPSymptom.shortnessOfBreath:
+        return languageProvider.t('bloodPressure.symptom.shortnessOfBreath');
+      case BPSymptom.nosebleeds:
+        return languageProvider.t('bloodPressure.symptom.nosebleeds');
+      case BPSymptom.visionProblems:
+        return languageProvider.t('bloodPressure.symptom.visionProblems');
+      case BPSymptom.fatigue:
+        return languageProvider.t('bloodPressure.symptom.fatigue');
+      case BPSymptom.palpitations:
+        return languageProvider.t('bloodPressure.symptom.palpitations');
+      case BPSymptom.none:
+        return languageProvider.t('bloodPressure.symptom.none');
     }
   }
 
-  bool _isSevereSymptom(BloodSugarSymptom symptom) {
-    return symptom == BloodSugarSymptom.confusion ||
-        symptom == BloodSugarSymptom.fainting ||
-        symptom == BloodSugarSymptom.vomiting ||
-        symptom == BloodSugarSymptom.breathingTrouble ||
-        symptom == BloodSugarSymptom.unconscious;
+  bool _isSevereSymptom(BPSymptom symptom) {
+    return symptom == BPSymptom.chestPain ||
+        symptom == BPSymptom.shortnessOfBreath ||
+        symptom == BPSymptom.dizziness;
   }
 }

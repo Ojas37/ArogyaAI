@@ -2,24 +2,22 @@ import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:provider/provider.dart';
 import '../providers/language_provider.dart';
-import '../models/blood_sugar_reading.dart';
-import '../services/blood_sugar_classifier.dart';
+import '../services/heart_rate_classifier.dart';
 import '../services/location_service.dart';
 import '../services/geocoding_service.dart';
-import 'blood_sugar_results_screen.dart';
 
-class BloodSugarCheckScreen extends StatefulWidget {
-  const BloodSugarCheckScreen({super.key});
+class HeartRateCheckScreen extends StatefulWidget {
+  const HeartRateCheckScreen({super.key});
 
   @override
-  State<BloodSugarCheckScreen> createState() => _BloodSugarCheckScreenState();
+  State<HeartRateCheckScreen> createState() => _HeartRateCheckScreenState();
 }
 
-class _BloodSugarCheckScreenState extends State<BloodSugarCheckScreen> {
+class _HeartRateCheckScreenState extends State<HeartRateCheckScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _sugarController = TextEditingController();
+  final _heartRateController = TextEditingController();
   final _placeController = TextEditingController();
-  final Set<BloodSugarSymptom> _selectedSymptoms = {};
+  final Set<HeartRateSymptom> _selectedSymptoms = {};
   bool _isLoading = false;
   bool _isSearchingPlace = false;
   bool _useManualLocation = false;
@@ -31,7 +29,7 @@ class _BloodSugarCheckScreenState extends State<BloodSugarCheckScreen> {
 
   @override
   void dispose() {
-    _sugarController.dispose();
+    _heartRateController.dispose();
     _placeController.dispose();
     super.dispose();
   }
@@ -54,13 +52,13 @@ class _BloodSugarCheckScreenState extends State<BloodSugarCheckScreen> {
   String _getHintText(LanguageProvider languageProvider) {
     switch (_locationType) {
       case 'City':
-        return languageProvider.t('bloodSugar.hintCity');
+        return languageProvider.t('heartRate.hintCity');
       case 'Village':
-        return languageProvider.t('bloodSugar.hintVillage');
+        return languageProvider.t('heartRate.hintVillage');
       case 'Pin Code':
-        return languageProvider.t('bloodSugar.hintPinCode');
+        return languageProvider.t('heartRate.hintPinCode');
       case 'Taluka':
-        return languageProvider.t('bloodSugar.hintTaluka');
+        return languageProvider.t('heartRate.hintTaluka');
       default:
         return languageProvider.t('location.enterLocation');
     }
@@ -69,133 +67,75 @@ class _BloodSugarCheckScreenState extends State<BloodSugarCheckScreen> {
   String _getLocationTip(LanguageProvider languageProvider) {
     switch (_locationType) {
       case 'City':
-        return languageProvider.t('bloodSugar.tipCity');
+        return languageProvider.t('heartRate.tipCity');
       case 'Village':
-        return languageProvider.t('bloodSugar.tipVillage');
+        return languageProvider.t('heartRate.tipVillage');
       case 'Pin Code':
-        return languageProvider.t('bloodSugar.tipPinCode');
+        return languageProvider.t('heartRate.tipPinCode');
       case 'Taluka':
-        return languageProvider.t('bloodSugar.tipTaluka');
+        return languageProvider.t('heartRate.tipTaluka');
       default:
         return '';
-    }
-  }
-
-  Future<void> _searchPlace() async {
-    final languageProvider =
-        Provider.of<LanguageProvider>(context, listen: false);
-
-    if (_placeController.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            languageProvider.t(
-              'bloodSugar.enterLocationType',
-              params: {'type': _locationTypeLabel(languageProvider)},
-            ),
-          ),
-          backgroundColor: Colors.orange,
-        ),
-      );
-      return;
-    }
-
-    setState(() => _isSearchingPlace = true);
-
-    try {
-      // Format search query based on location type
-      String searchQuery = _placeController.text;
-      if (_locationType == 'Pin Code') {
-        searchQuery += ', India'; // Add country for better pin code search
-      } else if (_locationType == 'Taluka') {
-        searchQuery += ', Maharashtra, India'; // Add state context for taluka
-      }
-
-      final result = await GeocodingService.searchPlace(searchQuery);
-
-      if (result != null && mounted) {
-        setState(() {
-          _selectedLatitude = result['latitude'];
-          _selectedLongitude = result['longitude'];
-          _selectedPlaceName = result['displayName'];
-        });
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              languageProvider.t(
-                'bloodSugar.locationFound',
-                params: {'name': result['displayName']},
-              ),
-            ),
-            backgroundColor: Colors.green,
-            duration: const Duration(seconds: 3),
-          ),
-        );
-      } else if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(languageProvider.t('bloodSugar.locationNotFound')),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              languageProvider.t(
-                'bloodSugar.errorMessage',
-                params: {'error': e.toString()},
-              ),
-            ),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    } finally {
-      if (mounted) {
-        setState(() => _isSearchingPlace = false);
-      }
     }
   }
 
   Future<void> _getCurrentLocation() async {
     final languageProvider =
         Provider.of<LanguageProvider>(context, listen: false);
+
     setState(() => _isLoading = true);
 
     try {
       // Check if location services are enabled
-      bool serviceEnabled = await LocationService.isLocationServiceEnabled();
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!serviceEnabled) {
         if (mounted) {
-          final shouldOpen = await _showLocationServiceDialog();
-          if (shouldOpen) {
-            await LocationService.openLocationSettings();
+          bool openSettings = await _showLocationServiceDialog();
+          if (openSettings) {
+            await Geolocator.openLocationSettings();
+          }
+        }
+        setState(() => _isLoading = false);
+        return;
+      }
+
+      // Check location permissions
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) {
+          if (mounted) {
+            await _showPermissionDialog();
           }
           setState(() => _isLoading = false);
           return;
         }
       }
 
-      // Get location
-      final position = await LocationService.getCurrentLocationWithTimeout(
-        timeout: const Duration(seconds: 10),
+      if (permission == LocationPermission.deniedForever) {
+        if (mounted) {
+          await _showPermissionDialog();
+        }
+        setState(() => _isLoading = false);
+        return;
+      }
+
+      // Get current position
+      Position position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
       );
 
-      if (position != null && mounted) {
+      if (mounted) {
         setState(() {
           _currentPosition = position;
           _selectedLatitude = position.latitude;
           _selectedLongitude = position.longitude;
+          _selectedPlaceName = 'Current Location';
         });
 
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content:
-                Text(languageProvider.t('bloodSugar.locationAcquiredSuccess')),
+            content: Text(languageProvider.t('heartRate.locationAcquiredSuccess')),
             backgroundColor: Colors.green,
             duration: const Duration(seconds: 2),
           ),
@@ -204,7 +144,7 @@ class _BloodSugarCheckScreenState extends State<BloodSugarCheckScreen> {
     } catch (e) {
       if (mounted) {
         String errorMessage = languageProvider.t(
-          'bloodSugar.locationError',
+          'heartRate.locationError',
           params: {'error': e.toString()},
         );
 
@@ -223,6 +163,87 @@ class _BloodSugarCheckScreenState extends State<BloodSugarCheckScreen> {
     }
   }
 
+  Future<void> _searchPlace() async {
+    final languageProvider =
+        Provider.of<LanguageProvider>(context, listen: false);
+
+    if (_placeController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            languageProvider.t(
+              'heartRate.enterLocationType',
+              params: {'type': _locationTypeLabel(languageProvider)},
+            ),
+          ),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    setState(() => _isSearchingPlace = true);
+
+    try {
+      // Format search query based on location type
+      String searchQuery = _placeController.text;
+      if (_locationType == 'Pin Code') {
+        searchQuery += ', India';
+      } else if (_locationType == 'Taluka') {
+        searchQuery += ', Maharashtra, India';
+      }
+
+      final result = await GeocodingService.searchPlace(searchQuery);
+
+      if (result != null && mounted) {
+        setState(() {
+          _selectedLatitude = result['latitude'];
+          _selectedLongitude = result['longitude'];
+          _selectedPlaceName = result['displayName'];
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              languageProvider.t(
+                'heartRate.locationFound',
+                params: {'name': result['displayName']},
+              ),
+            ),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      } else if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(languageProvider.t('heartRate.locationNotFound')),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        String errorMessage = languageProvider.t(
+          'heartRate.errorMessage',
+          params: {'error': e.toString()},
+        );
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(errorMessage),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isSearchingPlace = false);
+      }
+    }
+  }
+
   Future<bool> _showLocationServiceDialog() async {
     final languageProvider =
         Provider.of<LanguageProvider>(context, listen: false);
@@ -233,11 +254,11 @@ class _BloodSugarCheckScreenState extends State<BloodSugarCheckScreen> {
               children: [
                 const Icon(Icons.location_off, color: Colors.orange),
                 const SizedBox(width: 8),
-                Text(languageProvider.t('bloodSugar.locationServicesDisabled')),
+                Text(languageProvider.t('heartRate.locationServicesDisabled')),
               ],
             ),
             content: Text(
-              languageProvider.t('bloodSugar.locationServicesOff'),
+              languageProvider.t('heartRate.locationServicesOff'),
             ),
             actions: [
               TextButton(
@@ -297,8 +318,8 @@ class _BloodSugarCheckScreenState extends State<BloodSugarCheckScreen> {
     setState(() => _isLoading = true);
 
     try {
-      // Parse sugar value
-      final sugarValue = double.parse(_sugarController.text);
+      // Parse heart rate value
+      final heartRateValue = int.parse(_heartRateController.text);
 
       // Get location
       double? latitude = _selectedLatitude;
@@ -311,7 +332,7 @@ class _BloodSugarCheckScreenState extends State<BloodSugarCheckScreen> {
             SnackBar(
               content: Text(
                 Provider.of<LanguageProvider>(context, listen: false)
-                    .t('bloodSugar.locationFirst'),
+                    .t('heartRate.locationFirst'),
               ),
               backgroundColor: Colors.orange,
             ),
@@ -322,23 +343,11 @@ class _BloodSugarCheckScreenState extends State<BloodSugarCheckScreen> {
       }
 
       // Classify reading
-      final reading = BloodSugarClassifier.classifyReading(
-        sugarValue: sugarValue,
-        symptoms: _selectedSymptoms.toList(),
-      );
+      final level = HeartRateClassifier.classify(heartRateValue);
 
-      // Navigate to results
+      // Show result dialog
       if (mounted) {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => BloodSugarResultsScreen(
-              reading: reading,
-              latitude: latitude,
-              longitude: longitude,
-            ),
-          ),
-        );
+        _showResultDialog(level, heartRateValue);
       }
     } catch (e) {
       if (mounted) {
@@ -346,7 +355,7 @@ class _BloodSugarCheckScreenState extends State<BloodSugarCheckScreen> {
           SnackBar(
             content: Text(
               Provider.of<LanguageProvider>(context, listen: false).t(
-                'bloodSugar.errorMessage',
+                'heartRate.errorMessage',
                 params: {'error': e.toString()},
               ),
             ),
@@ -360,13 +369,78 @@ class _BloodSugarCheckScreenState extends State<BloodSugarCheckScreen> {
     }
   }
 
+  void _showResultDialog(HeartRateLevel level, int value) {
+    final languageProvider = Provider.of<LanguageProvider>(context, listen: false);
+    
+    Color levelColor;
+    String statusText;
+    String adviceText;
+    
+    switch (level) {
+      case HeartRateLevel.green:
+        levelColor = Colors.green;
+        statusText = languageProvider.t('vitalsForm.statusNormal');
+        adviceText = languageProvider.t('vitalsForm.adviceNormal');
+        break;
+      case HeartRateLevel.yellow:
+        levelColor = Colors.orange;
+        statusText = languageProvider.t('vitalsForm.statusWarning');
+        adviceText = languageProvider.t('vitalsForm.adviceMonitor');
+        break;
+      case HeartRateLevel.red:
+        levelColor = Colors.red;
+        statusText = languageProvider.t('vitalsForm.statusEmergency');
+        adviceText = languageProvider.t('vitalsForm.adviceSeekCare');
+        break;
+    }
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(Icons.favorite, color: levelColor),
+            const SizedBox(width: 8),
+            Text(statusText, style: TextStyle(color: levelColor)),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '${languageProvider.t('heartRate.label')}: $value bpm',
+              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 12),
+            Text(adviceText),
+            if (_selectedSymptoms.isNotEmpty && _selectedSymptoms.first != HeartRateSymptom.none) ...[
+              const SizedBox(height: 12),
+              Text(
+                languageProvider.t('heartRate.withSymptoms', 
+                  params: {'count': _selectedSymptoms.length.toString()}),
+                style: const TextStyle(fontStyle: FontStyle.italic),
+              ),
+            ],
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(languageProvider.t('common.ok')),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final languageProvider = Provider.of<LanguageProvider>(context);
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(languageProvider.t('bloodSugar.title')),
+        title: Text(languageProvider.t('heartRate.title')),
         backgroundColor: Colors.teal,
       ),
       body: SingleChildScrollView(
@@ -384,35 +458,35 @@ class _BloodSugarCheckScreenState extends State<BloodSugarCheckScreen> {
               ),
               const SizedBox(height: 16),
               Text(
-                languageProvider.t('bloodSugar.header'),
+                languageProvider.t('heartRate.header'),
                 style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 8),
               Text(
-                languageProvider.t('bloodSugar.description'),
+                languageProvider.t('heartRate.description'),
                 style: const TextStyle(color: Colors.grey),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 32),
 
-              // Sugar value input
+              // Heart rate input
               TextFormField(
-                controller: _sugarController,
+                controller: _heartRateController,
                 keyboardType: TextInputType.number,
                 decoration: InputDecoration(
-                  labelText: languageProvider.t('bloodSugar.label'),
-                  hintText: languageProvider.t('bloodSugar.hintValue'),
+                  labelText: languageProvider.t('heartRate.label'),
+                  hintText: languageProvider.t('heartRate.hintValue'),
                   border: const OutlineInputBorder(),
-                  prefixIcon: const Icon(Icons.medical_information),
+                  prefixIcon: const Icon(Icons.favorite),
                 ),
                 validator: (value) {
                   if (value == null || value.isEmpty) {
-                    return languageProvider.t('bloodSugar.required');
+                    return languageProvider.t('heartRate.required');
                   }
-                  final num? sugar = double.tryParse(value);
-                  if (sugar == null || sugar <= 0 || sugar > 1000) {
-                    return languageProvider.t('bloodSugar.invalid');
+                  final num? bpm = int.tryParse(value);
+                  if (bpm == null || bpm <= 0 || bpm > 300) {
+                    return languageProvider.t('heartRate.invalid');
                   }
                   return null;
                 },
@@ -439,7 +513,7 @@ class _BloodSugarCheckScreenState extends State<BloodSugarCheckScreen> {
                       title: Text(languageProvider.t('location.enterManual')),
                       subtitle: Text(
                         _useManualLocation
-                            ? languageProvider.t('bloodSugar.manualEntryMode')
+                            ? languageProvider.t('heartRate.manualEntryMode')
                             : languageProvider.t('location.usingGps'),
                         style: const TextStyle(fontSize: 12),
                       ),
@@ -534,9 +608,9 @@ class _BloodSugarCheckScreenState extends State<BloodSugarCheckScreen> {
                   children: [
                     // Location type dropdown
                     DropdownButtonFormField<String>(
-                      initialValue: _locationType,
+                      value: _locationType,
                       decoration: InputDecoration(
-                        labelText: languageProvider.t('bloodSugar.searchBy'),
+                        labelText: languageProvider.t('heartRate.searchBy'),
                         border: const OutlineInputBorder(),
                         prefixIcon: const Icon(Icons.map),
                       ),
@@ -642,7 +716,7 @@ class _BloodSugarCheckScreenState extends State<BloodSugarCheckScreen> {
 
               // Symptoms section
               Text(
-                languageProvider.t('bloodSugar.symptomsTitle'),
+                languageProvider.t('heartRate.symptomsTitle'),
                 style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 8),
@@ -686,7 +760,7 @@ class _BloodSugarCheckScreenState extends State<BloodSugarCheckScreen> {
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        languageProvider.t('bloodSugar.disclaimer'),
+                        languageProvider.t('heartRate.disclaimer'),
                         style: const TextStyle(fontSize: 12),
                       ),
                     ),
@@ -702,15 +776,15 @@ class _BloodSugarCheckScreenState extends State<BloodSugarCheckScreen> {
 
   Widget _buildSymptomChips(LanguageProvider languageProvider) {
     final symptoms = [
-      BloodSugarSymptom.confusion,
-      BloodSugarSymptom.fainting,
-      BloodSugarSymptom.vomiting,
-      BloodSugarSymptom.breathingTrouble,
-      BloodSugarSymptom.excessiveThirst,
-      BloodSugarSymptom.frequentUrination,
-      BloodSugarSymptom.fatigue,
-      BloodSugarSymptom.blurredVision,
-      BloodSugarSymptom.none,
+      HeartRateSymptom.chestPain,
+      HeartRateSymptom.palpitations,
+      HeartRateSymptom.shortnesOfBreath,
+      HeartRateSymptom.dizziness,
+      HeartRateSymptom.fatigue,
+      HeartRateSymptom.lightheadedness,
+      HeartRateSymptom.fainting,
+      HeartRateSymptom.sweating,
+      HeartRateSymptom.none,
     ];
 
     return Wrap(
@@ -725,7 +799,7 @@ class _BloodSugarCheckScreenState extends State<BloodSugarCheckScreen> {
           selected: isSelected,
           onSelected: (selected) {
             setState(() {
-              if (symptom == BloodSugarSymptom.none) {
+              if (symptom == HeartRateSymptom.none) {
                 // If "None" is selected, clear all others
                 _selectedSymptoms.clear();
                 if (selected) {
@@ -733,7 +807,7 @@ class _BloodSugarCheckScreenState extends State<BloodSugarCheckScreen> {
                 }
               } else {
                 // Remove "None" if selecting other symptoms
-                _selectedSymptoms.remove(BloodSugarSymptom.none);
+                _selectedSymptoms.remove(HeartRateSymptom.none);
                 if (selected) {
                   _selectedSymptoms.add(symptom);
                 } else {
@@ -752,38 +826,34 @@ class _BloodSugarCheckScreenState extends State<BloodSugarCheckScreen> {
   }
 
   String _getSymptomLabel(
-    BloodSugarSymptom symptom,
+    HeartRateSymptom symptom,
     LanguageProvider languageProvider,
   ) {
     switch (symptom) {
-      case BloodSugarSymptom.confusion:
-        return languageProvider.t('bloodSugar.symptom.confusion');
-      case BloodSugarSymptom.fainting:
-        return languageProvider.t('bloodSugar.symptom.fainting');
-      case BloodSugarSymptom.vomiting:
-        return languageProvider.t('bloodSugar.symptom.vomiting');
-      case BloodSugarSymptom.breathingTrouble:
-        return languageProvider.t('bloodSugar.symptom.breathingTrouble');
-      case BloodSugarSymptom.unconscious:
-        return languageProvider.t('bloodSugar.symptom.unconscious');
-      case BloodSugarSymptom.excessiveThirst:
-        return languageProvider.t('bloodSugar.symptom.excessiveThirst');
-      case BloodSugarSymptom.frequentUrination:
-        return languageProvider.t('bloodSugar.symptom.frequentUrination');
-      case BloodSugarSymptom.fatigue:
-        return languageProvider.t('bloodSugar.symptom.fatigue');
-      case BloodSugarSymptom.blurredVision:
-        return languageProvider.t('bloodSugar.symptom.blurredVision');
-      case BloodSugarSymptom.none:
-        return languageProvider.t('bloodSugar.symptom.none');
+      case HeartRateSymptom.chestPain:
+        return languageProvider.t('heartRate.symptom.chestPain');
+      case HeartRateSymptom.palpitations:
+        return languageProvider.t('heartRate.symptom.palpitations');
+      case HeartRateSymptom.shortnesOfBreath:
+        return languageProvider.t('heartRate.symptom.shortnessOfBreath');
+      case HeartRateSymptom.dizziness:
+        return languageProvider.t('heartRate.symptom.dizziness');
+      case HeartRateSymptom.fatigue:
+        return languageProvider.t('heartRate.symptom.fatigue');
+      case HeartRateSymptom.lightheadedness:
+        return languageProvider.t('heartRate.symptom.lightheadedness');
+      case HeartRateSymptom.fainting:
+        return languageProvider.t('heartRate.symptom.fainting');
+      case HeartRateSymptom.sweating:
+        return languageProvider.t('heartRate.symptom.sweating');
+      case HeartRateSymptom.none:
+        return languageProvider.t('heartRate.symptom.none');
     }
   }
 
-  bool _isSevereSymptom(BloodSugarSymptom symptom) {
-    return symptom == BloodSugarSymptom.confusion ||
-        symptom == BloodSugarSymptom.fainting ||
-        symptom == BloodSugarSymptom.vomiting ||
-        symptom == BloodSugarSymptom.breathingTrouble ||
-        symptom == BloodSugarSymptom.unconscious;
+  bool _isSevereSymptom(HeartRateSymptom symptom) {
+    return symptom == HeartRateSymptom.chestPain ||
+        symptom == HeartRateSymptom.fainting ||
+        symptom == HeartRateSymptom.shortnesOfBreath;
   }
 }

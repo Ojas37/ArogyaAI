@@ -1,59 +1,63 @@
 import '../models/blood_sugar_reading.dart';
+import 'package:flutter/material.dart';
 
 class BloodSugarClassifier {
-  /// Classify blood sugar reading into RED, ORANGE, or GREEN level
-  static BloodSugarReading classifyReading({
+  /// Classify blood sugar reading into 3 categories:
+  /// - NORMAL → 70 to 140 mg/dL
+  /// - MEDIUM → 141 to 250 OR below 70 mg/dL
+  /// - EMERGENCY → Above 250 mg/dL
+  static BloodSugarReading getSugarCategory({
     required double sugarValue,
-    required List<BloodSugarSymptom> symptoms,
+    List<BloodSugarSymptom>? symptoms,
   }) {
     BloodSugarLevel level;
     String message;
     String facilityType;
+    bool autoFetchHospitals;
+    bool showAmbulanceButton;
 
-    // Check for severe symptoms
-    final hasSevereSymptoms = symptoms.any((symptom) =>
-        symptom == BloodSugarSymptom.confusion ||
-        symptom == BloodSugarSymptom.fainting ||
-        symptom == BloodSugarSymptom.vomiting ||
-        symptom == BloodSugarSymptom.breathingTrouble ||
-        symptom == BloodSugarSymptom.unconscious);
-
-    // Classification logic
-    if (sugarValue >= 600 || hasSevereSymptoms) {
-      // RED - Emergency
+    // Classification logic based on exact requirements
+    if (sugarValue > 250) {
+      // EMERGENCY
       level = BloodSugarLevel.red;
-      message = 'EMERGENCY: Your reading is very high and may be life-threatening. '
-          'Please seek emergency care NOW.';
+      message = 'Medical Emergency! Seek immediate care.';
       facilityType = 'hospital';
-    } else if (sugarValue >= 300 || (sugarValue > 180 && symptoms.isNotEmpty)) {
-      // ORANGE - Urgent
+      autoFetchHospitals = true;
+      showAmbulanceButton = true;
+    } else if ((sugarValue >= 141 && sugarValue <= 250) || sugarValue < 70) {
+      // MEDIUM
       level = BloodSugarLevel.orange;
-      message = 'URGENT: Your blood sugar is high. '
-          'Please consult a doctor or visit a clinic soon.';
-      facilityType = 'hospital,clinic';
+      message = 'Your blood sugar is abnormal. Please consult a doctor.';
+      facilityType = 'hospital';
+      autoFetchHospitals = false;
+      showAmbulanceButton = false;
     } else {
-      // GREEN - Normal/Manage
+      // NORMAL (70 to 140)
       level = BloodSugarLevel.green;
-      if (sugarValue >= 80 && sugarValue <= 130) {
-        message = 'Your fasting blood sugar is in the normal range. '
-            'Continue monitoring and maintain healthy habits.';
-      } else if (sugarValue < 180) {
-        message = 'Your blood sugar is acceptable. '
-            'Continue monitoring and consult with your doctor if needed.';
-      } else {
-        message = 'Your blood sugar is slightly elevated. '
-            'Monitor closely and consult with your doctor.';
-      }
-      facilityType = 'pharmacy';
+      message = 'Your blood sugar is within the healthy range.';
+      facilityType = '';
+      autoFetchHospitals = false;
+      showAmbulanceButton = false;
     }
 
     return BloodSugarReading(
       sugarValue: sugarValue,
-      symptoms: symptoms,
+      symptoms: symptoms ?? [],
       timestamp: DateTime.now(),
       level: level,
       message: message,
       facilityType: facilityType,
+    );
+  }
+
+  /// Legacy method for backward compatibility
+  static BloodSugarReading classifyReading({
+    required double sugarValue,
+    required List<BloodSugarSymptom> symptoms,
+  }) {
+    return getSugarCategory(
+      sugarValue: sugarValue,
+      symptoms: symptoms,
     );
   }
 
@@ -73,14 +77,26 @@ class BloodSugarClassifier {
   }
 
   /// Get severity color for UI
-  static String getLevelColor(BloodSugarLevel level) {
+  static Color getLevelColor(BloodSugarLevel level) {
     switch (level) {
       case BloodSugarLevel.red:
-        return '#D32F2F'; // Red
+        return Colors.red.shade600;
       case BloodSugarLevel.orange:
-        return '#F57C00'; // Orange
+        return Colors.orange.shade600;
       case BloodSugarLevel.green:
-        return '#388E3C'; // Green
+        return Colors.green.shade600;
+    }
+  }
+
+  /// Get icon for blood sugar level
+  static IconData getIcon(BloodSugarLevel level) {
+    switch (level) {
+      case BloodSugarLevel.green:
+        return Icons.check_circle;
+      case BloodSugarLevel.orange:
+        return Icons.warning;
+      case BloodSugarLevel.red:
+        return Icons.emergency;
     }
   }
 
@@ -90,9 +106,24 @@ class BloodSugarClassifier {
       case BloodSugarLevel.red:
         return 'EMERGENCY';
       case BloodSugarLevel.orange:
-        return 'URGENT';
+        return 'ABNORMAL';
       case BloodSugarLevel.green:
         return 'NORMAL';
     }
+  }
+
+  /// Determine if hospitals should be shown
+  static bool shouldShowHospitals(BloodSugarLevel level) {
+    return level == BloodSugarLevel.red || level == BloodSugarLevel.orange;
+  }
+
+  /// Determine if hospitals should be auto-fetched
+  static bool shouldAutoFetchHospitals(BloodSugarLevel level) {
+    return level == BloodSugarLevel.red;
+  }
+
+  /// Determine if ambulance button should be shown
+  static bool shouldShowAmbulanceButton(BloodSugarLevel level) {
+    return level == BloodSugarLevel.red;
   }
 }

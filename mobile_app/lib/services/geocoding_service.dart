@@ -8,7 +8,7 @@ class GeocodingService {
   static Future<Map<String, dynamic>?> searchPlace(String placeName) async {
     try {
       final url = Uri.parse(
-        '$_baseUrl/search?q=$placeName&format=json&limit=1&addressdetails=1',
+        '$_baseUrl/search?q=$placeName&format=json&limit=10&addressdetails=1',
       );
 
       final response = await http.get(
@@ -20,15 +20,20 @@ class GeocodingService {
 
       if (response.statusCode == 200) {
         final List<dynamic> results = json.decode(response.body);
-        
         if (results.isNotEmpty) {
-          final result = results[0];
-          return {
-            'latitude': double.parse(result['lat']),
-            'longitude': double.parse(result['lon']),
-            'displayName': result['display_name'],
-            'address': result['address'],
-          };
+          // Find the first result in India
+          final indiaResult = results.firstWhere(
+            (r) => (r['display_name']?.toLowerCase().contains('india') ?? false),
+            orElse: () => null,
+          );
+          if (indiaResult != null) {
+            return {
+              'latitude': double.parse(indiaResult['lat']),
+              'longitude': double.parse(indiaResult['lon']),
+              'displayName': indiaResult['display_name'],
+              'address': indiaResult['address'],
+            };
+          }
         }
       }
       return null;
