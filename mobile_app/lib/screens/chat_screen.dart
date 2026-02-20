@@ -1,19 +1,25 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:uuid/uuid.dart';
 import '../providers/triage_provider.dart';
 import '../providers/language_provider.dart';
 import '../services/speech_service.dart';
 import '../services/api_service.dart';
+import '../services/storage_service.dart';
 import '../models/symptom_report.dart';
 import '../models/chat_message.dart';
-import 'result_screen.dart';
+import '../models/chat_session.dart';
 import 'vitals_screen.dart';
+import 'nearest_medical_facility_screen.dart';
+import 'nearest_hospital_clinics_screen.dart';
+import 'schemes_screen.dart';
+import 'chat_history_screen.dart';
 
 class ChatScreen extends StatefulWidget {
-  final Function(int)? onNavigateToTab;
-  
-  const ChatScreen({super.key, this.onNavigateToTab});
+  final ChatSession? existingSession;
+
+  const ChatScreen({super.key, this.existingSession});
 
   @override
   State<ChatScreen> createState() => _ChatScreenState();
@@ -28,32 +34,71 @@ class _ChatScreenState extends State<ChatScreen> {
   bool _isDetectingLanguage = false;
   String _lastLanguage = 'en';
   bool _hasRequestedLocation = false;
-  
-  // Generate unique session ID on each app reload for fresh conversations
-  late final String _sessionId = 'session_${DateTime.now().millisecondsSinceEpoch}';
+  late String _sessionId;
+  bool _isSessionLoaded = false;
 
   @override
   void initState() {
     super.initState();
-    print('🆕 New chat session started: $_sessionId');
-    _addWelcomeMessage();
+
+    // Generate or use existing session ID
+    if (widget.existingSession != null) {
+      _sessionId = widget.existingSession!.id;
+      _loadExistingSession();
+    } else {
+      _sessionId = const Uuid().v4();
+      _addWelcomeMessage();
+    }
+
+    // Mark this session as active
+    _markSessionActive();
+  }
+
+  void _loadExistingSession() {
+    if (widget.existingSession != null) {
+      setState(() {
+        _messages.clear();
+        _messages.addAll(widget.existingSession!.messages);
+        _isSessionLoaded = true;
+      });
+    }
+  }
+
+  Future<void> _markSessionActive() async {
+    await StorageService.deactivateAllSessions();
+    _saveSession(isActive: true);
+  }
+
+  Future<void> _saveSession({bool isActive = true}) async {
+    if (_messages.isEmpty) return;
+
+    final session = ChatSession(
+      id: _sessionId,
+      title: ChatSession.generateTitle(_messages),
+      createdAt: widget.existingSession?.createdAt ?? DateTime.now(),
+      lastUpdatedAt: DateTime.now(),
+      messages: _messages,
+      isActive: isActive,
+    );
+
+    await StorageService.saveChatSession(session);
   }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     final languageProvider = Provider.of<LanguageProvider>(context);
-    
+
     // Check if language has changed
     if (_lastLanguage != languageProvider.currentLanguage) {
       _lastLanguage = languageProvider.currentLanguage;
-      
+
       // Clear previous messages and add new welcome message in current language
       setState(() {
         _messages.clear();
       });
       _addWelcomeMessage();
-      
+
       // Request location permission after language is set
       if (!_hasRequestedLocation) {
         _hasRequestedLocation = true;
@@ -66,22 +111,23 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Future<void> _requestLocationPermission() async {
     final status = await Permission.location.request();
-    
+
     if (!mounted) return;
-    
+
     if (status.isDenied || status.isPermanentlyDenied) {
+      final languageProvider =
+          Provider.of<LanguageProvider>(context, listen: false);
+
       showDialog(
         context: context,
         barrierDismissible: false,
         builder: (context) => AlertDialog(
-          title: const Text('Location Required'),
-          content: const Text(
-            'Location access is required to find nearby doctors and provide personalized healthcare services. Please enable location permission in your device settings.'
-          ),
+          title: Text(languageProvider.t('permissions.locationTitle')),
+          content: Text(languageProvider.t('permissions.locationMessage')),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
-              child: const Text('OK'),
+              child: Text(languageProvider.t('common.ok')),
             ),
             if (status.isPermanentlyDenied)
               ElevatedButton(
@@ -98,9 +144,10 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   void _addWelcomeMessage() {
-    final languageProvider = Provider.of<LanguageProvider>(context, listen: false);
-    final welcomeText = _getWelcomeText(languageProvider.currentLanguage);
-    
+    final languageProvider =
+        Provider.of<LanguageProvider>(context, listen: false);
+    final welcomeText = languageProvider.t('chat.welcome');
+
     setState(() {
       _messages.add(ChatMessage(
         text: welcomeText,
@@ -108,172 +155,97 @@ class _ChatScreenState extends State<ChatScreen> {
         timestamp: DateTime.now(),
       ));
     });
+
+    // Save session after adding welcome message
+    Future.delayed(const Duration(milliseconds: 100), () => _saveSession());
   }
 
   String _getWelcomeText(String language) {
-    switch (language) {
-      case 'hi':
-        return 'नमस्ते! मैं आपका स्वास्थ्य सहायक हूं। कृपया अपने लक्षण बताएं।';
-      case 'te':
-        return 'నమస్కారం! నేను మీ ఆరోగ్య సహాయకుడిని. దయచేసి మీ లక్షణాలను చెప్పండి.';
-      case 'ta':
-        return 'வணக்கம்! நான் உங்கள் சுகாதார உதவியாளர். உங்கள் அறிகுறிகளைச் சொல்லுங்கள்.';
-      case 'bn':
-        return 'নমস্কার! আমি আপনার স্বাস্থ্য সহায়ক। অনুগ্রহ করে আপনার লক্ষণগুলি বলুন।';
-      case 'mr':
-        return 'नमस्कार! मी तुमचा आरोग्य सहाय्यक आहे. कृपया तुमची लक्षणे सांगा.';
-      case 'kn':
-        return 'ನಮಸ್ಕಾರ! ನಾನು ನಿಮ್ಮ ಆರೋಗ್ಯ ಸಹಾಯಕ. ದಯವಿಟ್ಟು ನಿಮ್ಮ ಲಕ್ಷಣಗಳನ್ನು ತಿಳಿಸಿ.';
-      case 'gu':
-        return 'નમસ્તે! હું તમારો આરોગ્ય સહાયક છું. કૃપા કરીને તમારા લક્ષણો જણાવો.';
-      case 'bh':
-        return 'नमस्कार! हम राउर स्वास्थ्य सहायक हईं। कृपया आपन लक्षण बताईं।';
-      case 'pa':
-        return 'ਸਤ ਸ੍ਰੀ ਅਕਾਲ! ਮੈਂ ਤੁਹਾਡਾ ਸਿਹਤ ਸਹਾਇਕ ਹਾਂ। ਕਿਰਪਾ ਕਰਕੇ ਆਪਣੇ ਲੱਛਣ ਦੱਸੋ।';
-      default:
-        return 'Hello! I\'m your health assistant. Please tell me your symptoms.';
-    }
+    // Deprecated: Now using translation service
+    return 'Hello! I\'m your health assistant. Please tell me your symptoms.';
   }
 
   String _getHintText(String language) {
-    switch (language) {
-      case 'hi':
-        return 'अपने लक्षण लिखें...';
-      case 'te':
-        return 'మీ లక్షణాలను టైప్ చేయండి...';
-      case 'ta':
-        return 'உங்கள் அறிகுறிகளை தட்டச்சு செய்யுங்கள்...';
-      case 'bn':
-        return 'আপনার লক্ষণগুলি টাইপ করুন...';
-      case 'mr':
-        return 'तुमची लक्षणे टाइप करा...';
-      case 'kn':
-        return 'ನಿಮ್ಮ ಲಕ್ಷಣಗಳನ್ನು ಟೈಪ್ ಮಾಡಿ...';
-      case 'gu':
-        return 'તમારા લક્ષણો ટાઇપ કરો...';
-      case 'bh':
-        return 'आपन लक्षण टाइप करीं...';
-      case 'pa':
-        return 'ਆਪਣੇ ਲੱਛਣ ਟਾਈਪ ਕਰੋ...';
-      default:
-        return 'Type your symptoms...';
-    }
+    // Deprecated: Now using translation service
+    return 'Type your symptoms...';
   }
 
   String _getTitle(String language) {
-    switch (language) {
-      case 'hi':
-        return 'स्वास्थ्य सहायक';
-      case 'te':
-        return 'ఆరోగ్య సహాయకుడు';
-      case 'ta':
-        return 'சுகாதார உதவியாளர்';
-      case 'bn':
-        return 'স্বাস্থ্য সহায়ক';
-      case 'mr':
-        return 'आरोग्य सहाय्यक';
-      case 'kn':
-        return 'ಆರೋಗ್ಯ ಸಹಾಯಕ';
-      case 'gu':
-        return 'આરોગ્ય સહાયક';
-      default:
-        return 'Health Assistant';
-    }
+    // Deprecated: Now using translation service
+    return 'Health Assistant';
   }
 
   Future<void> _handleVoiceInput() async {
-    final languageProvider = Provider.of<LanguageProvider>(context, listen: false);
-    
+    final languageProvider =
+        Provider.of<LanguageProvider>(context, listen: false);
+
     setState(() {
       _isListening = true;
+      _textController.clear(); // Clear any existing text
     });
 
     try {
-      final text = await _speechService.listen(languageProvider.currentLanguage);
-      if (text.isNotEmpty) {
-        _textController.text = text;
-      }
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: ${e.toString()}')),
+      // Use the new streaming method that updates word-by-word
+      await _speechService.listenWithCallback(
+        languageCode: languageProvider.currentLanguage,
+        onResult: (recognizedText) {
+          // Update text field in real-time as words are recognized
+          setState(() {
+            _textController.text = recognizedText;
+            // Move cursor to the end
+            _textController.selection = TextSelection.fromPosition(
+              TextPosition(offset: _textController.text.length),
+            );
+          });
+        },
+        onListeningComplete: () {
+          // Called when speech recognition stops
+          if (mounted) {
+            setState(() {
+              _isListening = false;
+            });
+          }
+        },
+        onError: (error) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Error: $error')),
+            );
+            setState(() {
+              _isListening = false;
+            });
+          }
+        },
       );
-    } finally {
-      setState(() {
-        _isListening = false;
-   
-
-  Future<void> _handleAutoDetect() async {
-    final text = _textController.text.trim();
-    if (text.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter some text first')),
-      );
-      return;
-    }
-
-    setState(() {
-      _isDetectingLanguage = true;
-    });
-
-    try {
-      final result = await _apiService.detectLanguage(text);
-      final detectedLang = result['language'] as String;
-      final detectedName = result['detected_language_name'] as String? ?? detectedLang;
-      final confidence = result['confidence'] as double;
-
-      if (mounted) {
-        // Show detection result
-        showDialog(
-          context: context,
-          builder: (context) => AlertDialog(
-            title: const Text('Language Detected'),
-            content: Text(
-              'Detected: $detectedName ($detectedLang)\n'
-              'Confidence: ${(confidence * 100).toStringAsFixed(0)}%\n\n'
-              'Would you like to switch to this language?',
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('Cancel'),
-              ),
-              ElevatedButton(
-                onPressed: () {
-                  final languageProvider = Provider.of<LanguageProvider>(context, listen: false);
-                  languageProvider.setLanguage(detectedLang);
-                  Navigator.pop(context);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Switched to $detectedName')),
-                  );
-                },
-                child: const Text('Switch'),
-              ),
-            ],
-          ),
-        );
-      }
     } catch (e) {
       if (mounted) {
+        final languageProvider =
+            Provider.of<LanguageProvider>(context, listen: false);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error detecting language: ${e.toString()}')),
+          SnackBar(
+              content: Text(languageProvider.t('chat.errorSendingMessage'))),
         );
-      }
-    } finally {
-      if (mounted) {
         setState(() {
-          _isDetectingLanguage = false;
+          _isListening = false;
         });
       }
     }
-  }   });
-    }
+  }
+
+  // Method to manually stop listening
+  Future<void> _stopListening() async {
+    await _speechService.stop();
+    setState(() {
+      _isListening = false;
+    });
   }
 
   Future<void> _handleSubmit() async {
     final text = _textController.text.trim();
     if (text.isEmpty) return;
 
-    final languageProvider = Provider.of<LanguageProvider>(context, listen: false);
+    final languageProvider =
+        Provider.of<LanguageProvider>(context, listen: false);
     final triageProvider = Provider.of<TriageProvider>(context, listen: false);
 
     // Add user message
@@ -285,12 +257,15 @@ class _ChatScreenState extends State<ChatScreen> {
       ));
     });
 
+    // Save session after user message
+    _saveSession();
+
     _textController.clear();
 
-    // Create symptom report with unique session ID
+    // Create symptom report
     final report = SymptomReport(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
-      userId: _sessionId, // Unique session ID per app reload
+      userId: 'user123', // TODO: Implement proper auth
       language: languageProvider.currentLanguage,
       textInput: text,
       timestamp: DateTime.now(),
@@ -299,7 +274,7 @@ class _ChatScreenState extends State<ChatScreen> {
     // Show loading
     setState(() {
       _messages.add(ChatMessage(
-        text: 'Analyzing...',
+        text: languageProvider.t('chat.processing'),
         isUser: false,
         timestamp: DateTime.now(),
         isLoading: true,
@@ -311,33 +286,21 @@ class _ChatScreenState extends State<ChatScreen> {
       _messages.removeLast();
     });
 
-    try {
-      // Call API and get conversational response
-      await triageProvider.analyzeSymptoms(report);
+    // Store report temporarily in provider
+    await triageProvider.analyzeSymptoms(report);
 
-      // Get the conversational response from the API
-      final result = triageProvider.currentResult;
-      final responseText = result?.recommendation ?? 
-        'I\'ve recorded your symptoms. You can continue chatting or check the results using the Symptom Check button below.';
+    // Add AI response
+    setState(() {
+      _messages.add(ChatMessage(
+        text:
+            'I\'ve recorded your symptoms. You can continue chatting or check the results using the Symptom Check button below.',
+        isUser: false,
+        timestamp: DateTime.now(),
+      ));
+    });
 
-      // Add AI response
-      setState(() {
-        _messages.add(ChatMessage(
-          text: responseText,
-          isUser: false,
-          timestamp: DateTime.now(),
-        ));
-      });
-    } catch (e) {
-      // Show error in chat
-      setState(() {
-        _messages.add(ChatMessage(
-          text: 'Sorry, I encountered an error: ${e.toString()}. Please try again.',
-          isUser: false,
-          timestamp: DateTime.now(),
-        ));
-      });
-    }
+    // Save session after AI response
+    _saveSession();
   }
 
   Widget _buildDrawer(LanguageProvider languageProvider) {
@@ -360,7 +323,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 ),
                 const SizedBox(height: 16),
                 Text(
-                  'ArogyaAI Health',
+                  languageProvider.t('app.name'),
                   style: const TextStyle(
                     color: Colors.white,
                     fontSize: 24,
@@ -372,42 +335,64 @@ class _ChatScreenState extends State<ChatScreen> {
           ),
           ListTile(
             leading: const Icon(Icons.chat, color: Colors.green),
-            title: const Text('Chatbot'),
+            title: Text(languageProvider.t('drawer.chatbot')),
             onTap: () {
               Navigator.pop(context); // Close drawer
               // Already on chat screen
             },
           ),
           ListTile(
-            leading: const Icon(Icons.account_balance, color: Colors.green),
-            title: const Text('Government Schemes'),
+            leading: const Icon(Icons.history, color: Colors.blue),
+            title: Text(languageProvider.t('drawer.chatHistory')),
             onTap: () {
               Navigator.pop(context);
-              // Navigate to Schemes tab (index 3)
-              widget.onNavigateToTab?.call(3);
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const ChatHistoryScreen(),
+                ),
+              );
+            },
+          ),
+          const Divider(),
+          ListTile(
+            leading: const Icon(Icons.account_balance, color: Colors.green),
+            title: Text(languageProvider.t('drawer.governmentSchemes')),
+            onTap: () {
+              Navigator.pop(context);
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const SchemesScreen()),
+              );
             },
           ),
           ListTile(
-            leading: const Icon(Icons.phone, color: Colors.green),
-            title: const Text('Call Nearest Doctor'),
-            onTap: () async {
+            leading: const Icon(Icons.local_hospital, color: Colors.green),
+            title: Text(languageProvider.t('drawer.nearestMedicalFacility')),
+            onTap: () {
               Navigator.pop(context);
-              final status = await Permission.location.status;
-              if (status.isGranted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Finding nearest doctors...'),
-                    duration: Duration(seconds: 2),
-                  ),
-                );
-              } else {
-                _requestLocationPermission();
-              }
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                    builder: (context) => const NearestMedicalFacilityScreen()),
+              );
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.medical_services, color: Colors.green),
+            title: Text(languageProvider.t('drawer.nearestHospitalClinics')),
+            onTap: () {
+              Navigator.pop(context);
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                    builder: (context) => const NearestHospitalClinicsScreen()),
+              );
             },
           ),
           ListTile(
             leading: const Icon(Icons.favorite, color: Colors.green),
-            title: const Text('Vitals'),
+            title: Text(languageProvider.t('navigation.vitals')),
             onTap: () {
               Navigator.pop(context);
               Navigator.push(
@@ -419,16 +404,40 @@ class _ChatScreenState extends State<ChatScreen> {
           const Divider(),
           ListTile(
             leading: const Icon(Icons.info_outline, color: Colors.grey),
-            title: const Text('About'),
+            title: Text(languageProvider.t('drawer.about')),
             onTap: () {
               Navigator.pop(context);
               showAboutDialog(
                 context: context,
-                applicationName: 'ArogyaAI Health',
+                applicationName: languageProvider.t('app.name'),
                 applicationVersion: '1.0.0',
-                applicationIcon: const Icon(Icons.health_and_safety, size: 48, color: Colors.green),
+                applicationIcon: const Icon(Icons.health_and_safety,
+                    size: 48, color: Colors.green),
                 children: [
-                  const Text('AI-powered rural healthcare assistant with multilingual symptom checker.'),
+                  Text(
+                    languageProvider.t('app.tagline'),
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.orange.shade50,
+                      border: Border.all(color: Colors.orange.shade200),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      languageProvider.t('app.caution'),
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: Colors.orange.shade900,
+                        height: 1.4,
+                      ),
+                    ),
+                  ),
                 ],
               );
             },
@@ -441,10 +450,10 @@ class _ChatScreenState extends State<ChatScreen> {
   @override
   Widget build(BuildContext context) {
     final languageProvider = Provider.of<LanguageProvider>(context);
-    
+
     return Scaffold(
       appBar: AppBar(
-        title: Text(_getTitle(languageProvider.currentLanguage)),
+        title: Text(languageProvider.t('chat.title')),
         backgroundColor: Colors.green[700],
         foregroundColor: Colors.white,
         leading: Builder(
@@ -453,6 +462,32 @@ class _ChatScreenState extends State<ChatScreen> {
             onPressed: () => Scaffold.of(context).openDrawer(),
           ),
         ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.history),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const ChatHistoryScreen(),
+                ),
+              );
+            },
+            tooltip: 'Chat History',
+          ),
+          IconButton(
+            icon: const Icon(Icons.add),
+            onPressed: () {
+              Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const ChatScreen(),
+                ),
+              );
+            },
+            tooltip: 'New Chat',
+          ),
+        ],
       ),
       drawer: _buildDrawer(languageProvider),
       body: Column(
@@ -467,7 +502,43 @@ class _ChatScreenState extends State<ChatScreen> {
               },
             ),
           ),
-          
+
+          // Listening indicator
+          if (_isListening)
+            Container(
+              padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+              color: Colors.red.shade50,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor: AlwaysStoppedAnimation<Color>(Colors.red),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Text(
+                    languageProvider.t('chat.listening'),
+                    style: TextStyle(
+                      color: Colors.red.shade700,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    '(Tap mic to stop)',
+                    style: TextStyle(
+                      color: Colors.red.shade600,
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
           // Input area
           Container(
             padding: const EdgeInsets.all(16),
@@ -489,17 +560,20 @@ class _ChatScreenState extends State<ChatScreen> {
                     _isListening ? Icons.mic : Icons.mic_none,
                     color: _isListening ? Colors.red : Colors.blue,
                   ),
-                  onPressed: _handleVoiceInput,
+                  onPressed: _isListening ? _stopListening : _handleVoiceInput,
+                  tooltip: _isListening
+                      ? languageProvider.t('chat.stopListening')
+                      : languageProvider.t('chat.tapToSpeak'),
                   iconSize: 32,
                 ),
                 const SizedBox(width: 8),
-                
+
                 // Text input
                 Expanded(
                   child: TextField(
                     controller: _textController,
                     decoration: InputDecoration(
-                      hintText: _getHintText(languageProvider.currentLanguage),
+                      hintText: languageProvider.t('chat.inputPlaceholder'),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(25),
                       ),
@@ -514,7 +588,7 @@ class _ChatScreenState extends State<ChatScreen> {
                   ),
                 ),
                 const SizedBox(width: 8),
-                
+
                 // Send button
                 IconButton(
                   icon: const Icon(Icons.send),
@@ -562,8 +636,9 @@ class _ChatScreenState extends State<ChatScreen> {
 
   @override
   void dispose() {
+    // Save session before disposing (mark as inactive)
+    _saveSession(isActive: false);
     _textController.dispose();
     super.dispose();
   }
 }
-
