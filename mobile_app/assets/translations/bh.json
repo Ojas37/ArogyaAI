@@ -27,6 +27,11 @@
     "filter": "फिल्टर",
     "clear": "साफ करीं"
   },
+  "offline": {
+    "mode": "ऑफलाइन मोड - बुनियादी लक्षण जांच उपलब्ध",
+    "limited": "ऑफलाइन में सीमित सुविधा उपलब्ध",
+    "syncing": "ऑनलाइन होला पर सिंक होई"
+  },
   "language": {
     "select": "भाषा चुनीं",
     "english": "अंग्रेजी",
@@ -47,7 +52,9 @@
     "schemes": "योजना"
   },
   "drawer": {
+    "header": "आरोग्य AI हेल्थ",
     "chatbot": "चैटबॉट",
+    "chatHistory": "चैट इतिहास",
     "govSchemes": "सरकारी योजना",
     "nearbyFacilities": "नजदीक के चिकित्सा सुविधा",
     "emergencyContacts": "आपातकालीन संपर्क",

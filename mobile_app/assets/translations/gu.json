@@ -27,6 +27,11 @@
     "filter": "ફિલ્ટર",
     "clear": "સાફ કરો"
   },
+  "offline": {
+    "mode": "ઓફલાઈન મોડ - મૂળભૂત લક્ષણ તપાસ ઉપલબ્ધ",
+    "limited": "ઓફલાઈનમાં મર્યાદિત સુવિધાઓ ઉપલબ્ધ",
+    "syncing": "ઓનલાઈન હોવા પર સિંક થશે"
+  },
   "language": {
     "select": "ભાષા પસંદ કરો",
     "english": "અંગ્રેજી",
@@ -47,7 +52,9 @@
     "schemes": "યોજનાઓ"
   },
   "drawer": {
+    "header": "આરોગ્ય AI હેલ્થ",
     "chatbot": "ચેટબોટ",
+    "chatHistory": "ચેટ ઇતિહાસ",
     "govSchemes": "સરકારી યોજનાઓ",
     "nearbyFacilities": "નજીકની તબીબી સુવિધા",
     "emergencyContacts": "કટોકટી સંપર્કો",

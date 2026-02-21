@@ -24,7 +24,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   List<Widget> get _screens => [
-    ChatScreen(onNavigateToTab: _changeTab),
+    const ChatScreen(),
     const VitalsScreen(),
     const HistoryScreen(),
     const SchemesScreen(),

@@ -112,9 +112,9 @@ class BloodSugarClassifier {
     }
   }
 
-  /// Determine if hospitals should be shown
+  /// Determine if hospitals should be shown (now shown for ALL levels)
   static bool shouldShowHospitals(BloodSugarLevel level) {
-    return level == BloodSugarLevel.red || level == BloodSugarLevel.orange;
+    return true; // Always show hospital finder option
   }
 
   /// Determine if hospitals should be auto-fetched

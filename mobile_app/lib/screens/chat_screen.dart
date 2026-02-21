@@ -4,6 +4,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:uuid/uuid.dart';
 import '../providers/triage_provider.dart';
 import '../providers/language_provider.dart';
+import '../providers/connectivity_provider.dart';
 import '../services/speech_service.dart';
 import '../services/api_service.dart';
 import '../services/storage_service.dart';
@@ -36,6 +37,7 @@ class _ChatScreenState extends State<ChatScreen> {
   bool _hasRequestedLocation = false;
   late String _sessionId;
   bool _isSessionLoaded = false;
+  bool _isSubmitting = false; // Add guard to prevent double submission
 
   @override
   void initState() {
@@ -146,7 +148,16 @@ class _ChatScreenState extends State<ChatScreen> {
   void _addWelcomeMessage() {
     final languageProvider =
         Provider.of<LanguageProvider>(context, listen: false);
+    
     final welcomeText = languageProvider.t('chat.welcome');
+    
+    // If translation returns the key itself, translations aren't loaded yet - retry
+    if (welcomeText == 'chat.welcome' || languageProvider.isLoading) {
+      Future.delayed(const Duration(milliseconds: 100), () {
+        if (mounted) _addWelcomeMessage();
+      });
+      return;
+    }
 
     setState(() {
       _messages.add(ChatMessage(
@@ -242,7 +253,11 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Future<void> _handleSubmit() async {
     final text = _textController.text.trim();
-    if (text.isEmpty) return;
+    if (text.isEmpty || _isSubmitting) return; // Prevent double submission
+
+    setState(() {
+      _isSubmitting = true;
+    });
 
     final languageProvider =
         Provider.of<LanguageProvider>(context, listen: false);
@@ -262,10 +277,10 @@ class _ChatScreenState extends State<ChatScreen> {
 
     _textController.clear();
 
-    // Create symptom report
+    // Create symptom report - use sessionId as userId for fresh conversations
     final report = SymptomReport(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
-      userId: 'user123', // TODO: Implement proper auth
+      userId: _sessionId, // Use session ID so new chats get fresh context
       language: languageProvider.currentLanguage,
       textInput: text,
       timestamp: DateTime.now(),
@@ -281,26 +296,50 @@ class _ChatScreenState extends State<ChatScreen> {
       ));
     });
 
-    // Remove loading message
-    setState(() {
-      _messages.removeLast();
-    });
+    try {
+      // Check connectivity and call API with offline fallback
+      final connectivityProvider = Provider.of<ConnectivityProvider>(context, listen: false);
+      await triageProvider.analyzeSymptoms(report, isOnline: connectivityProvider.isOnline);
 
-    // Store report temporarily in provider
-    await triageProvider.analyzeSymptoms(report);
+      // Remove loading message
+      setState(() {
+        _messages.removeLast();
+      });
 
-    // Add AI response
-    setState(() {
-      _messages.add(ChatMessage(
-        text:
-            'I\'ve recorded your symptoms. You can continue chatting or check the results using the Symptom Check button below.',
-        isUser: false,
-        timestamp: DateTime.now(),
-      ));
-    });
+      // Get the actual AI response from the API
+      final aiResponse = triageProvider.currentResult?.recommendation ?? 
+          'I\'ve recorded your symptoms. You can continue chatting or check the results using the Symptom Check button below.';
 
-    // Save session after AI response
-    _saveSession();
+      // Add AI response
+      setState(() {
+        _messages.add(ChatMessage(
+          text: aiResponse,
+          isUser: false,
+          timestamp: DateTime.now(),
+        ));
+      });
+
+      // Save session after AI response
+      _saveSession();
+    } catch (e) {
+      // Remove loading message
+      setState(() {
+        _messages.removeLast();
+      });
+
+      // Show error message
+      setState(() {
+        _messages.add(ChatMessage(
+          text: 'Error: ${e.toString()}',
+          isUser: false,
+          timestamp: DateTime.now(),
+        ));
+      });
+    } finally {
+      setState(() {
+        _isSubmitting = false;
+      });
+    }
   }
 
   Widget _buildDrawer(LanguageProvider languageProvider) {
@@ -490,18 +529,42 @@ class _ChatScreenState extends State<ChatScreen> {
         ],
       ),
       drawer: _buildDrawer(languageProvider),
-      body: Column(
-        children: [
-          // Chat messages
-          Expanded(
-            child: ListView.builder(
-              padding: const EdgeInsets.all(16),
-              itemCount: _messages.length,
-              itemBuilder: (context, index) {
-                return _buildMessage(_messages[index]);
-              },
-            ),
-          ),
+      body: Consumer<ConnectivityProvider>(
+        builder: (context, connectivityProvider, child) {
+          return Column(
+            children: [
+              // Offline mode banner
+              if (!connectivityProvider.isOnline)
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+                  color: Colors.orange.shade100,
+                  child: Row(
+                    children: [
+                      Icon(Icons.cloud_off, color: Colors.orange.shade700, size: 20),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          languageProvider.t('offline.mode'),
+                          style: TextStyle(
+                            color: Colors.orange.shade900,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              // Chat messages
+              Expanded(
+                child: ListView.builder(
+                  padding: const EdgeInsets.all(16),
+                  itemCount: _messages.length,
+                  itemBuilder: (context, index) {
+                    return _buildMessage(_messages[index]);
+                  },
+                ),
+              ),
 
           // Listening indicator
           if (_isListening)
@@ -592,14 +655,16 @@ class _ChatScreenState extends State<ChatScreen> {
                 // Send button
                 IconButton(
                   icon: const Icon(Icons.send),
-                  onPressed: _handleSubmit,
+                  onPressed: _isSubmitting ? null : _handleSubmit,
                   iconSize: 32,
-                  color: Colors.blue,
+                  color: _isSubmitting ? Colors.grey : Colors.blue,
                 ),
               ],
             ),
           ),
         ],
+      );
+        },
       ),
     );
   }

@@ -4,10 +4,10 @@ import '../models/symptom_report.dart';
 import '../models/triage_result.dart';
 
 class ApiService {
-  // Backend API URL - using 127.0.0.1 for better browser compatibility
-  // Change this to your computer's IP when testing on physical device
+  // Backend API URL - using local IP for physical device testing
+  // Change back to 127.0.0.1 for emulator/browser testing
   // Find IP: ipconfig (Windows) or ifconfig (Mac/Linux)
-  static const String baseUrl = 'http://127.0.0.1:8000/api/v1';
+  static const String baseUrl = 'http://192.168.42.242:8000/api/v1';
   
   Future<TriageResult> analyzeSymptoms(SymptomReport report) async {
     try {

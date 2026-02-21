@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../services/location_service.dart';
 import '../services/overpass_service.dart';
 import '../models/medical_facility.dart';
@@ -178,13 +179,9 @@ class _NearestMedicalFacilityScreenState
         limit: 100,
         radiusMeters: 20000,
       );
-      // Filter results to India
-      final filtered = facilities.where((facility) {
-        final address = facility.address?.toLowerCase() ?? '';
-        return address.contains('india');
-      }).toList();
+      // No filtering - OSM entries may not have full address
       setState(() {
-        _facilities = filtered;
+        _facilities = facilities;
         _isLoading = false;
       });
     } catch (e) {
@@ -199,7 +196,7 @@ class _NearestMedicalFacilityScreenState
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Nearest Medical Facility'),
+        title: const Text('Nearby Pharmacies'),
         backgroundColor: Colors.green[700],
       ),
       body: SingleChildScrollView(
@@ -225,7 +222,7 @@ class _NearestMedicalFacilityScreenState
                       style: const TextStyle(fontSize: 12),
                     ),
                     value: _useManualLocation,
-                    activeThumbColor: Colors.teal,
+                    activeColor: Colors.teal,
                     onChanged: (value) {
                       setState(() => _useManualLocation = value);
                     },
@@ -299,7 +296,7 @@ class _NearestMedicalFacilityScreenState
               Column(
                 children: [
                   DropdownButtonFormField<String>(
-                    initialValue: _locationType,
+                    value: _locationType,
                     decoration: const InputDecoration(
                       labelText: 'Search By',
                       border: OutlineInputBorder(),
@@ -392,7 +389,7 @@ class _NearestMedicalFacilityScreenState
                 backgroundColor: Colors.teal,
                 padding: const EdgeInsets.all(16),
               ),
-              child: const Text('Find Nearby Medical Facilities'),
+              child: const Text('Find Nearby Pharmacies'),
             ),
             const SizedBox(height: 24),
             if (_isLoading)
@@ -430,7 +427,7 @@ class _NearestMedicalFacilityScreenState
                     SizedBox(width: 12),
                     Expanded(
                       child: Text(
-                          'No facilities found nearby. Try searching manually in Google Maps.'),
+                          'No pharmacies found nearby. Try searching manually in Google Maps.'),
                     ),
                   ],
                 ),
@@ -552,7 +549,15 @@ class _NearestMedicalFacilityScreenState
       url = facility.googleMapsUrl;
     }
     final uri = Uri.parse(url);
-    // Use url_launcher or similar package
-    // TODO: Implement launchUrl logic
+    
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } else {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not open maps')),
+        );
+      }
+    }
   }
 }

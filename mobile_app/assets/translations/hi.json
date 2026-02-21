@@ -23,6 +23,11 @@
     "share": "साझा करें",
     "back": "वापस"
   },
+  "offline": {
+    "mode": "ऑफलाइन मोड - बुनियादी लक्षण जांच उपलब्ध",
+    "limited": "ऑफलाइन में सीमित सुविधाएं उपलब्ध",
+    "syncing": "ऑनलाइन होने पर सिंक होगा"
+  },
   "language": {
     "select": "भाषा चुनें",
     "english": "English",
@@ -45,9 +50,11 @@
   "drawer": {
     "header": "आरोग्य एआई स्वास्थ्य",
     "chatbot": "चैटबॉट",
+    "chatHistory": "चैट इतिहास",
     "governmentSchemes": "सरकारी योजनाएं",
     "nearestMedicalFacility": "निकटतम चिकित्सा सुविधा",
     "nearestHospitalClinics": "निकटतम अस्पताल और क्लीनिक",
+    "vitalsHealth": "स्वास्थ्य संकेतक",
     "about": "के बारे में"
   },
   "chat": {

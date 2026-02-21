@@ -23,6 +23,11 @@
     "share": "শেয়ার করুন",
     "back": "পিছনে"
   },
+  "offline": {
+    "mode": "অফলাইন মোড - মৌলিক লক্ষণ পরীক্ষা উপলব্ধ",
+    "limited": "অফলাইনে সীমিত সুবিধা উপলব্ধ",
+    "syncing": "অনলাইন হলে সিঙ্ক হবে"
+  },
   "language": {
     "select": "ভাষা নির্বাচন করুন",
     "english": "English",
@@ -45,6 +50,7 @@
   "drawer": {
     "header": "আরোগ্য AI স্বাস্থ্য",
     "chatbot": "চ্যাটবট",
+    "chatHistory": "চ্যাট ইতিহাস",
     "governmentSchemes": "সরকারি প্রকল্প",
     "nearestMedicalFacility": "নিকটতম চিকিৎসা সুবিধা",
     "nearestHospitalClinics": "নিকটতম হাসপাতাল এবং ক্লিনিক",

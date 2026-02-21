@@ -1,9 +1,15 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../models/medical_facility.dart';
 
 class OverpassService {
-  static const String _baseUrl = 'https://overpass-api.de/api/interpreter';
+  // Multiple Overpass API servers for fallback
+  static const List<String> _servers = [
+    'https://overpass-api.de/api/interpreter',
+    'https://lz4.overpass-api.de/api/interpreter',
+    'https://z.overpass-api.de/api/interpreter',
+  ];
   static const double _radiusMeters = 10000; // 10 km
 
   /// Search for nearby medical facilities based on type
@@ -12,42 +18,56 @@ class OverpassService {
     required double longitude,
     required String facilityType, // hospital, clinic, pharmacy
     int limit = 5,
-    double radiusMeters = 10000,
+    double radiusMeters = 5000, // Reduced to 5km for faster response
   }) async {
-    try {
-      final query = _buildOverpassQuery(
-        latitude: latitude,
-        longitude: longitude,
-        facilityType: facilityType,
-        radiusMeters: radiusMeters,
-      );
-      final response = await http.post(
-        Uri.parse(_baseUrl),
-        body: {'data': query},
-      );
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        // Parse and filter facilities
-        final facilities = _parseOverpassResponse(
-          data,
-          userLat: latitude,
-          userLon: longitude,
-        );
-        // Sort by distance
-        facilities.sort((a, b) {
-          if (a.distanceInKm == null) return 1;
-          if (b.distanceInKm == null) return -1;
-          return a.distanceInKm!.compareTo(b.distanceInKm!);
-        });
-        // Return top results
-        return facilities.take(limit).toList();
-      } else {
-        throw Exception('Failed to fetch facilities: ${response.statusCode}');
+    final query = _buildOverpassQuery(
+      latitude: latitude,
+      longitude: longitude,
+      facilityType: facilityType,
+      radiusMeters: radiusMeters,
+    );
+
+    // Try each server until one succeeds
+    Exception? lastError;
+    for (final server in _servers) {
+      try {
+        print('Trying Overpass server: $server');
+        final response = await http
+            .post(
+              Uri.parse(server),
+              body: {'data': query},
+            )
+            .timeout(const Duration(seconds: 20));
+
+        if (response.statusCode == 200) {
+          final data = json.decode(response.body);
+          // Parse and filter facilities
+          final facilities = _parseOverpassResponse(
+            data,
+            userLat: latitude,
+            userLon: longitude,
+          );
+          // Sort by distance
+          facilities.sort((a, b) {
+            if (a.distanceInKm == null) return 1;
+            if (b.distanceInKm == null) return -1;
+            return a.distanceInKm!.compareTo(b.distanceInKm!);
+          });
+          // Return top results
+          return facilities.take(limit).toList();
+        } else {
+          lastError = Exception('Server $server returned: ${response.statusCode}');
+          print('Server $server failed with ${response.statusCode}, trying next...');
+        }
+      } catch (e) {
+        lastError = Exception('Server $server error: $e');
+        print('Server $server error: $e, trying next...');
       }
-    } catch (e) {
-      print('Error searching facilities: $e');
-      rethrow;
     }
+
+    // All servers failed
+    print('All Overpass servers failed');
+    throw lastError ?? Exception('All Overpass servers failed');
   }
 
   /// Build Overpass QL query

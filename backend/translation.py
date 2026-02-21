@@ -2,7 +2,7 @@
 Translation Module for Healthcare Triage System
 
 Purpose: Translate user input to English and responses back to user language
-Supports: Pluggable translation backends (Google Translate API, Azure, or Mock)
+Supports: Pluggable translation backends (Google Translate via deep-translator, or Mock)
 
 IMPORTANT: Translation is ONLY for language conversion, NOT for changing medical meaning
 """
@@ -10,13 +10,13 @@ IMPORTANT: Translation is ONLY for language conversion, NOT for changing medical
 from typing import Dict, Optional
 import warnings
 
-# Try to import googletrans
+# Try to import deep_translator
 try:
-    from googletrans import Translator
-    GOOGLETRANS_AVAILABLE = True
+    from deep_translator import GoogleTranslator
+    DEEP_TRANSLATOR_AVAILABLE = True
 except ImportError:
-    GOOGLETRANS_AVAILABLE = False
-    warnings.warn("googletrans not installed. Using mock translator. Install with: pip install googletrans==4.0.0rc1")
+    DEEP_TRANSLATOR_AVAILABLE = False
+    warnings.warn("deep-translator not installed. Using mock translator. Install with: pip install deep-translator")
 
 
 class TranslationService:
@@ -24,12 +24,26 @@ class TranslationService:
     Pluggable translation service for healthcare chatbot
     
     Supports multiple backends:
-    - Google Translate (if available)
+    - Google Translate via deep-translator (reliable, free)
     - Mock translator (fallback for development)
     """
     
-    # Supported languages
+    # Supported languages with their codes
     SUPPORTED_LANGUAGES = {
+        'en': 'english',
+        'hi': 'hindi',
+        'mr': 'marathi',
+        'gu': 'gujarati',
+        'pa': 'punjabi',
+        'te': 'telugu',
+        'ta': 'tamil',
+        'bn': 'bengali',
+        'kn': 'kannada',
+        'bho': 'hindi'  # Bhojpuri maps to Hindi for translation
+    }
+    
+    # Display names for languages
+    LANGUAGE_NAMES = {
         'en': 'English',
         'hi': 'Hindi',
         'mr': 'Marathi',
@@ -52,15 +66,14 @@ class TranslationService:
         self.backend = backend
         
         if backend == "auto":
-            self.backend = "google" if GOOGLETRANS_AVAILABLE else "mock"
+            self.backend = "google" if DEEP_TRANSLATOR_AVAILABLE else "mock"
         
         if self.backend == "google":
-            if not GOOGLETRANS_AVAILABLE:
-                print("⚠️ Google Translate not available, using mock translator")
+            if not DEEP_TRANSLATOR_AVAILABLE:
+                print("⚠️ deep-translator not available, using mock translator")
                 self.backend = "mock"
             else:
-                self.translator = Translator()
-                print("✅ Google Translate initialized")
+                print("✅ Google Translate (via deep-translator) initialized")
         else:
             print("✅ Mock translator initialized (development mode)")
     
@@ -86,8 +99,10 @@ class TranslationService:
         
         if self.backend == "google":
             try:
-                result = self.translator.translate(text, src=source_lang, dest='en')
-                translated = result.text
+                # Get the target language name for deep-translator
+                source_name = self.SUPPORTED_LANGUAGES.get(source_lang, 'auto')
+                translator = GoogleTranslator(source=source_name, target='english')
+                translated = translator.translate(text)
                 print(f"📝 Translated ({source_lang} → en): {text[:50]}... → {translated[:50]}...")
                 return translated
             except Exception as e:
@@ -121,8 +136,10 @@ class TranslationService:
         
         if self.backend == "google":
             try:
-                result = self.translator.translate(text, src='en', dest=target_lang)
-                translated = result.text
+                # Get the target language name for deep-translator
+                target_name = self.SUPPORTED_LANGUAGES.get(target_lang, target_lang)
+                translator = GoogleTranslator(source='english', target=target_name)
+                translated = translator.translate(text)
                 print(f"📝 Translated (en → {target_lang}): {text[:50]}... → {translated[:50]}...")
                 return translated
             except Exception as e:
@@ -136,7 +153,7 @@ class TranslationService:
     
     def get_language_name(self, lang_code: str) -> str:
         """Get language name from code"""
-        return self.SUPPORTED_LANGUAGES.get(lang_code, "Unknown")
+        return self.LANGUAGE_NAMES.get(lang_code, "Unknown")
 
 
 # Singleton instance

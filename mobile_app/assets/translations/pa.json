@@ -27,6 +27,11 @@
     "filter": "ਫਿਲਟਰ",
     "clear": "ਸਾਫ ਕਰੋ"
   },
+  "offline": {
+    "mode": "ਔਫਲਾਈਨ ਮੋਡ - ਮੂਲ ਲੱਛਣ ਜਾਂਚ ਉਪਲਬਧ",
+    "limited": "ਔਫਲਾਈਨ ਵਿੱਚ ਸੀਮਤ ਸੁਵਿਧਾਵਾਂ ਉਪਲਬਧ",
+    "syncing": "ਔਨਲਾਈਨ ਹੋਣ ਤੇ ਸਿੰਕ ਹੋਵੇਗਾ"
+  },
   "language": {
     "select": "ਭਾਸ਼ਾ ਚੁਣੋ",
     "english": "ਅੰਗਰੇਜ਼ੀ",
@@ -47,7 +52,9 @@
     "schemes": "ਯੋਜਨਾਵਾਂ"
   },
   "drawer": {
+    "header": "ਆਰੋਗਯ AI ਹੈਲਥ",
     "chatbot": "ਚੈਟਬੋਟ",
+    "chatHistory": "ਚੈਟ ਇਤਿਹਾਸ",
     "govSchemes": "ਸਰਕਾਰੀ ਯੋਜਨਾਵਾਂ",
     "nearbyFacilities": "ਨੇੜਲੀ ਡਾਕਟਰੀ ਸਹੂਲਤ",
     "emergencyContacts": "ਐਮਰਜੈਂਸੀ ਸੰਪਰਕ",

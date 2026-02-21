@@ -37,7 +37,7 @@ class ChatSession {
       createdAt: DateTime.parse(json['createdAt'] as String),
       lastUpdatedAt: DateTime.parse(json['lastUpdatedAt'] as String),
       messages: (json['messages'] as List)
-          .map((m) => ChatMessage.fromJson(m as Map<String, dynamic>))
+          .map((m) => ChatMessage.fromJson(Map<String, dynamic>.from(m as Map)))
           .toList(),
       isActive: json['isActive'] as bool? ?? false,
     );

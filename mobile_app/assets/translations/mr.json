@@ -23,6 +23,11 @@
     "share": "शेअर करा",
     "back": "मागे"
   },
+  "offline": {
+    "mode": "ऑफलाइन मोड - मूलभूत लक्षण तपासणी उपलब्ध",
+    "limited": "ऑफलाइन मध्ये मर्यादित सुविधा उपलब्ध",
+    "syncing": "ऑनलाइन असताना सिंक होईल"
+  },
   "language": {
     "select": "भाषा निवडा",
     "english": "English",
@@ -45,6 +50,7 @@
   "drawer": {
     "header": "आरोग्य AI आरोग्य",
     "chatbot": "चॅटबॉट",
+    "chatHistory": "चॅट इतिहास",
     "governmentSchemes": "सरकारी योजना",
     "nearestMedicalFacility": "जवळची वैद्यकीय सुविधा",
     "nearestHospitalClinics": "जवळचे रुग्णालय आणि दवाखाने",

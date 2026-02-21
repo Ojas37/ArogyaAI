@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../models/blood_sugar_reading.dart';
-import '../models/hospital.dart';
+import '../models/medical_facility.dart';
 import '../services/blood_sugar_classifier.dart';
-import '../services/hospital_finder_service.dart';
+import '../services/overpass_service.dart';
 
 class BloodSugarResultScreen extends StatefulWidget {
   final double sugarValue;
@@ -21,10 +22,11 @@ class BloodSugarResultScreen extends StatefulWidget {
 
 class _BloodSugarResultScreenState extends State<BloodSugarResultScreen> {
   late BloodSugarReading result;
-  List<Hospital> hospitals = [];
+  List<MedicalFacility> hospitals = [];
   bool isLoadingHospitals = false;
   String? errorMessage;
   bool hospitalsFetched = false;
+  Position? _currentPosition;
 
   @override
   void initState() {
@@ -51,16 +53,44 @@ class _BloodSugarResultScreenState extends State<BloodSugarResultScreen> {
     });
 
     try {
-      final fetchedHospitals = await HospitalFinderService.findHospitalsAtCurrentLocation(
-        radiusKm: 10.0,
-        maxResults: 5,
+      // Get current location first
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        throw Exception('Location services are disabled.');
+      }
+
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) {
+          throw Exception('Location permission denied.');
+        }
+      }
+
+      if (permission == LocationPermission.deniedForever) {
+        throw Exception('Location permission permanently denied.');
+      }
+
+      _currentPosition = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
       );
 
-      setState(() {
-        hospitals = fetchedHospitals;
-        isLoadingHospitals = false;
-        hospitalsFetched = true;
-      });
+      // Fetch hospitals using OverpassService
+      final facilities = await OverpassService.searchNearbyFacilities(
+        latitude: _currentPosition!.latitude,
+        longitude: _currentPosition!.longitude,
+        facilityType: 'hospital,clinic',
+        limit: 10,
+        radiusMeters: 10000,
+      );
+
+      if (mounted) {
+        setState(() {
+          hospitals = facilities;
+          isLoadingHospitals = false;
+          hospitalsFetched = true;
+        });
+      }
 
       if (hospitals.isEmpty) {
         setState(() {
@@ -68,10 +98,12 @@ class _BloodSugarResultScreenState extends State<BloodSugarResultScreen> {
         });
       }
     } catch (e) {
-      setState(() {
-        isLoadingHospitals = false;
-        errorMessage = e.toString();
-      });
+      if (mounted) {
+        setState(() {
+          isLoadingHospitals = false;
+          errorMessage = e.toString();
+        });
+      }
     }
   }
 
@@ -104,10 +136,8 @@ class _BloodSugarResultScreenState extends State<BloodSugarResultScreen> {
     }
   }
 
-  Future<void> _openDirections(Hospital hospital) async {
-    final uri = Uri.parse(
-      'https://www.google.com/maps/dir/?api=1&destination=${hospital.latitude},${hospital.longitude}'
-    );
+  Future<void> _openDirections(MedicalFacility facility) async {
+    final uri = Uri.parse(facility.googleMapsUrl);
     
     try {
       if (await canLaunchUrl(uri)) {
@@ -415,7 +445,7 @@ class _BloodSugarResultScreenState extends State<BloodSugarResultScreen> {
     );
   }
 
-  Widget _buildHospitalCard(Hospital hospital, int index) {
+  Widget _buildHospitalCard(MedicalFacility facility, int index) {
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
@@ -461,67 +491,46 @@ class _BloodSugarResultScreenState extends State<BloodSugarResultScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        hospital.name,
+                        facility.name,
                         style: const TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
-                      const SizedBox(height: 4),
-                      Text(
-                        hospital.address,
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: Colors.grey.shade600,
-                        ),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      const SizedBox(height: 8),
-                      
-                      // Distance and rating
-                      Row(
-                        children: [
-                          Icon(
-                            Icons.location_on,
-                            size: 16,
+                      if (facility.address != null) ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          facility.address!,
+                          style: TextStyle(
+                            fontSize: 13,
                             color: Colors.grey.shade600,
                           ),
-                          const SizedBox(width: 4),
-                          Text(
-                            '${hospital.distance.toStringAsFixed(1)} km',
-                            style: TextStyle(
-                              fontSize: 13,
-                              color: Colors.grey.shade700,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                          if (hospital.rating != null) ...[
-                            const SizedBox(width: 16),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                      const SizedBox(height: 8),
+                      
+                      // Distance
+                      if (facility.distanceInKm != null)
+                        Row(
+                          children: [
                             Icon(
-                              Icons.star,
+                              Icons.location_on,
                               size: 16,
-                              color: Colors.amber.shade700,
+                              color: Colors.grey.shade600,
                             ),
                             const SizedBox(width: 4),
                             Text(
-                              '${hospital.rating!.toStringAsFixed(1)}',
-                              style: const TextStyle(
+                              '${facility.distanceInKm!.toStringAsFixed(1)} km',
+                              style: TextStyle(
                                 fontSize: 13,
+                                color: Colors.grey.shade700,
                                 fontWeight: FontWeight.w500,
                               ),
                             ),
-                            if (hospital.userRatingsTotal != null)
-                              Text(
-                                ' (${hospital.userRatingsTotal})',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: Colors.grey.shade600,
-                                ),
-                              ),
                           ],
-                        ],
-                      ),
+                        ),
                     ],
                   ),
                 ),
@@ -534,7 +543,7 @@ class _BloodSugarResultScreenState extends State<BloodSugarResultScreen> {
             SizedBox(
               width: double.infinity,
               child: ElevatedButton.icon(
-                onPressed: () => _openDirections(hospital),
+                onPressed: () => _openDirections(facility),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: BloodSugarClassifier.getLevelColor(result.level),
                   foregroundColor: Colors.white,

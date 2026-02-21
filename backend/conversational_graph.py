@@ -316,10 +316,35 @@ class ConversationalTriageGraph:
         if state.get("error"):
             return state
 
-        history = self.conversation_history.get(state.get("session_id", ""), [])
+        session_id = state.get("session_id", "")
+        history = self.conversation_history.get(session_id, [])
         known_symptoms = state.get("extracted_symptoms", [])
         known_severity = state.get("severity", "")
         known_duration = state.get("duration", "")
+        awaiting_followup = state.get("awaiting_followup", False)
+        
+        print(f"🔍 LLM NODE DEBUG: awaiting_followup={awaiting_followup}, known_symptoms={known_symptoms}, history_len={len(history)}")
+        
+        # 🔧 FIX: If we're awaiting a follow-up answer (e.g., duration/severity), 
+        # OR if we have conversation history with symptoms discussed, skip greeting classification
+        # and go straight to medical processing
+        if awaiting_followup:
+            english_text = state.get("english_text", "")
+            print(f"📨 FOLLOWUP ANSWER DETECTED: '{english_text}' - bypassing LLM, going to medical extraction")
+            state["conversation_intent"] = "followup"
+            state["conversation_action"] = "continue_medical"
+            state["awaiting_followup"] = False  # Reset the flag
+            return state
+        
+        # Also check if we have recent history discussing symptoms - treat short inputs as followups
+        if len(history) >= 2 and known_symptoms:
+            english_text = state.get("english_text", "")
+            # Short answers (less than 5 words) with existing symptoms = likely a followup answer
+            if len(english_text.split()) < 5:
+                print(f"📨 SHORT ANSWER WITH HISTORY: '{english_text}' - treating as followup")
+                state["conversation_intent"] = "followup"
+                state["conversation_action"] = "continue_medical"
+                return state
 
         system_prompt = (
             "You are a medical conversational assistant. You can greet, ask clarifying questions, "
@@ -659,6 +684,7 @@ class ConversationalTriageGraph:
         state["response_type"] = "followup"
         state["response_text"] = question
         state["mode"] = "chat"  # Still in conversation mode
+        state["awaiting_followup"] = True  # Mark that we're waiting for a follow-up answer
         print(f"🔄 FOLLOWUP NODE COMPLETE - mode={state['mode']}, response_type={state['response_type']}")
         return state
 
@@ -931,6 +957,7 @@ class ConversationalTriageGraph:
         print(f"   - Previous symptoms: {base_state.get('extracted_symptoms', [])}")
         print(f"   - Previous severity: {base_state.get('severity', '')}")
         print(f"   - Previous duration: {base_state.get('duration', '')}")
+        print(f"   - Awaiting followup: {base_state.get('awaiting_followup', False)}")
         
         base_state.update({
             "session_id": session_id,
@@ -949,7 +976,8 @@ class ConversationalTriageGraph:
             "extracted_symptoms": result.get("extracted_symptoms", []),
             "severity": result.get("severity", ""),
             "duration": result.get("duration", ""),
-            "body_parts": result.get("body_parts", [])
+            "body_parts": result.get("body_parts", []),
+            "awaiting_followup": result.get("awaiting_followup", False)  # Track if we asked a follow-up question
         }
         
         print(f"💾 SESSION STATE AFTER: session_id={session_id}")

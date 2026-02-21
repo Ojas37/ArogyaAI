@@ -17,6 +17,7 @@ Triage Levels:
 import pickle
 import numpy as np
 import pandas as pd
+import re
 from typing import Dict, List, Optional, Tuple
 import os
 import sys
@@ -145,6 +146,41 @@ class TriageEngine:
         except Exception as e:
             raise Exception(f"Error loading models: {e}")
     
+    def _normalize_severity(self, severity: str) -> str:
+        """
+        Convert numeric severity to text category
+        
+        Args:
+            severity: Raw severity string (could be "2", "mild", "mild (2/10)", etc.)
+            
+        Returns:
+            Normalized severity: 'mild', 'moderate', or 'severe'
+        """
+        severity = str(severity).lower().strip()
+        
+        # Try to extract number from severity string
+        numbers = re.findall(r'\d+', severity)
+        
+        if numbers:
+            num = int(numbers[0])
+            if num <= 3:
+                return 'mild'
+            elif num <= 6:
+                return 'moderate'
+            else:
+                return 'severe'
+        
+        # Text-based severity
+        if any(word in severity for word in ['mild', 'slight', 'low', 'minor', 'little']):
+            return 'mild'
+        elif any(word in severity for word in ['moderate', 'medium', 'medium']):
+            return 'moderate'
+        elif any(word in severity for word in ['severe', 'extreme', 'intense', 'critical', 'high', 'bad', 'terrible']):
+            return 'severe'
+        
+        # Default to moderate if unknown
+        return 'moderate'
+    
     def prepare_features(self, extracted_data: Dict) -> pd.DataFrame:
         """
         Prepare feature vector from extracted symptom data
@@ -163,11 +199,12 @@ class TriageEngine:
         features['symptom_count'] = len(symptoms)
         features['has_multiple_symptoms'] = int(len(symptoms) > 1)
         
-        # Severity features
-        severity = extracted_data.get('severity', '').lower()
-        features['severity_severe'] = int(severity in ['severe', 'extreme', 'intense', 'critical'])
-        features['severity_moderate'] = int(severity in ['moderate', 'high'])
-        features['severity_mild'] = int(severity in ['mild', 'slight', 'low'])
+        # Severity features - use normalized severity
+        raw_severity = extracted_data.get('severity', '')
+        severity = self._normalize_severity(raw_severity)
+        features['severity_severe'] = int(severity == 'severe')
+        features['severity_moderate'] = int(severity == 'moderate')
+        features['severity_mild'] = int(severity == 'mild')
         
         # Duration features
         duration = extracted_data.get('duration', '').lower()
@@ -284,7 +321,8 @@ class TriageEngine:
             'EMERGENCY' if emergency symptoms detected, None otherwise
         """
         symptoms = ' '.join(extracted_data.get('symptoms', [])).lower()
-        severity = extracted_data.get('severity', '').lower()
+        raw_severity = extracted_data.get('severity', '')
+        severity = self._normalize_severity(raw_severity)
         
         # Emergency keywords that always trigger EMERGENCY triage
         emergency_keywords = [
@@ -303,7 +341,7 @@ class TriageEngine:
             return 'EMERGENCY'
         
         # Check for severe + critical body parts
-        if severity in ['severe', 'extreme', 'critical', 'intense']:
+        if severity == 'severe':
             critical_parts = ['chest', 'heart', 'head', 'brain']
             if any(part in symptoms for part in critical_parts):
                 return 'EMERGENCY'
@@ -321,41 +359,71 @@ class TriageEngine:
             True if symptoms qualify for SELF_CARE, False otherwise
         """
         symptoms = ' '.join(extracted_data.get('symptoms', [])).lower()
-        severity = extracted_data.get('severity', '').lower()
+        raw_severity = extracted_data.get('severity', '')
+        severity = self._normalize_severity(raw_severity)
         duration = extracted_data.get('duration', '').lower()
         
-        # Self-care conditions: mild/slight severity + short duration + common symptoms
-        is_mild = severity in ['mild', 'slight', 'low', 'minimal', '']
+        # Self-care conditions: mild severity
+        is_mild = severity == 'mild'
+        is_moderate = severity == 'moderate'
         
-        # Check if duration is short (less than 2 days)
+        # Check duration
         is_short_duration = any(term in duration for term in [
             '1 day', 'one day', 'today', 'few hours', 'hour', 'hours',
-            'this morning', 'yesterday', 'since morning', 'since today'
+            'this morning', 'yesterday', 'since morning', 'since today',
+            '2 day', 'two day', '1', '2'
         ]) or duration == ''
         
-        # Common self-care symptoms (without fever or severe pain)
+        # Common self-care symptoms
         self_care_keywords = [
             'cough', 'cold', 'runny nose', 'sneezing', 'sore throat',
-            'stuffy nose', 'congestion', 'mild headache', 'tired', 'fatigue',
-            'muscle ache', 'body ache', 'minor pain'
+            'stuffy nose', 'congestion', 'headache', 'tired', 'fatigue',
+            'muscle ache', 'body ache', 'pain', 'stomach', 'stomach pain',
+            'abdominal', 'nausea', 'cramp', 'back pain', 'joint pain',
+            'stiff', 'sore', 'ache', 'mild fever', 'weakness'
         ]
         
-        # Symptoms that need doctor attention (not self-care)
-        needs_doctor_keywords = [
-            'fever', 'high temperature', 'vomiting', 'diarrhea', 'bleeding',
-            'chest', 'heart', 'breathe', 'breathing', 'severe', 'extreme',
-            'unbearable', 'intense pain', 'dizzy', 'faint'
+        # Emergency symptoms that NEVER qualify for self-care
+        emergency_keywords = [
+            'chest pain', 'heart', 'breathe', 'breathing', 'unconscious',
+            'severe bleeding', 'seizure', 'stroke', 'paralysis',
+            'severe chest', 'cannot breathe', 'difficulty breathing'
         ]
+        
+        # Symptoms that need doctor attention (URGENT, not self-care)
+        urgent_keywords = [
+            'high fever', 'persistent vomiting', 'blood in', 'bleeding',
+            'severe pain', 'unbearable', 'extreme', 'intense pain',
+            'persistent diarrhea', 'dehydration', 'swelling', 'infection'
+        ]
+        
+        # Check for emergency - never self-care
+        if any(keyword in symptoms for keyword in emergency_keywords):
+            return False
+        
+        # Check if severity is severe - not self-care
+        if severity == 'severe':
+            return False
+        
+        # Check if it has urgent symptoms
+        has_urgent_symptom = any(keyword in symptoms for keyword in urgent_keywords)
+        if has_urgent_symptom:
+            return False
         
         # Check if it's a common self-care symptom
         has_self_care_symptom = any(keyword in symptoms for keyword in self_care_keywords)
         
-        # Check if it has symptoms requiring doctor attention
-        has_doctor_symptom = any(keyword in symptoms for keyword in needs_doctor_keywords)
+        # Qualify for self-care:
+        # 1. Mild severity with any common symptom
+        if is_mild and has_self_care_symptom:
+            return True
         
-        # Qualify for self-care if:
-        # - Mild severity + short duration + common symptom + no doctor-required symptoms
-        if is_mild and is_short_duration and has_self_care_symptom and not has_doctor_symptom:
+        # 2. Moderate severity with short duration and common symptom
+        if is_moderate and is_short_duration and has_self_care_symptom:
+            return True
+        
+        # 3. Mild severity with short duration (even without specific keywords)
+        if is_mild and is_short_duration:
             return True
         
         return False

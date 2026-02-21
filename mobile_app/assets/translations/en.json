@@ -23,6 +23,11 @@
     "share": "Share",
     "back": "Back"
   },
+  "offline": {
+    "mode": "Offline Mode - Basic symptom check available",
+    "limited": "Limited features available offline",
+    "syncing": "Will sync when online"
+  },
   "language": {
     "select": "Select Language",
     "english": "English",
@@ -113,6 +118,7 @@
   "history": {
     "title": "Consultation History",
     "noHistory": "No consultation history",
+    "startConsultation": "Start a new consultation to see it here",
     "viewDetails": "View Details",
     "clearHistory": "Clear History",
     "confirmClear": "Are you sure you want to clear all history?"

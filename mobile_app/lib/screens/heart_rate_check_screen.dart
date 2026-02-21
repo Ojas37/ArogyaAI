@@ -5,6 +5,7 @@ import '../providers/language_provider.dart';
 import '../services/heart_rate_classifier.dart';
 import '../services/location_service.dart';
 import '../services/geocoding_service.dart';
+import 'nearest_medical_facility_screen.dart';
 
 class HeartRateCheckScreen extends StatefulWidget {
   const HeartRateCheckScreen({super.key});
@@ -425,6 +426,19 @@ class _HeartRateCheckScreenState extends State<HeartRateCheckScreen> {
           ],
         ),
         actions: [
+          TextButton.icon(
+            onPressed: () {
+              Navigator.pop(context);
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const NearestMedicalFacilityScreen(),
+                ),
+              );
+            },
+            icon: const Icon(Icons.local_hospital, size: 18),
+            label: const Text('Find Nearby Hospitals'),
+          ),
           TextButton(
             onPressed: () => Navigator.pop(context),
             child: Text(languageProvider.t('common.ok')),

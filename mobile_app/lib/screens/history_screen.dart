@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/language_provider.dart';
 import '../services/storage_service.dart';
+import '../models/chat_session.dart';
+import 'chat_screen.dart';
 
 class HistoryScreen extends StatefulWidget {
   const HistoryScreen({super.key});
@@ -11,17 +13,17 @@ class HistoryScreen extends StatefulWidget {
 }
 
 class _HistoryScreenState extends State<HistoryScreen> {
-  List<Map<String, dynamic>> _reports = [];
+  List<ChatSession> _sessions = [];
 
   @override
   void initState() {
     super.initState();
-    _loadReports();
+    _loadSessions();
   }
 
-  void _loadReports() {
+  void _loadSessions() {
     setState(() {
-      _reports = StorageService.getAllReports();
+      _sessions = StorageService.getAllChatSessions();
     });
   }
 
@@ -42,17 +44,9 @@ class _HistoryScreenState extends State<HistoryScreen> {
                 style:
                     const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
               ),
-              if (_reports.isNotEmpty)
+              if (_sessions.isNotEmpty)
                 TextButton.icon(
-                  onPressed: () async {
-                    await StorageService.clearAll();
-                    _loadReports();
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                          content:
-                              Text(languageProvider.t('history.clearHistory'))),
-                    );
-                  },
+                  onPressed: () => _confirmClearAll(languageProvider),
                   icon: const Icon(Icons.delete_outline),
                   label: Text(languageProvider.t('common.clear')),
                 ),
@@ -60,9 +54,9 @@ class _HistoryScreenState extends State<HistoryScreen> {
           ),
           const SizedBox(height: 16),
 
-          // Report list
+          // Session list
           Expanded(
-            child: _reports.isEmpty
+            child: _sessions.isEmpty
                 ? Center(
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
@@ -92,10 +86,10 @@ class _HistoryScreenState extends State<HistoryScreen> {
                     ),
                   )
                 : ListView.builder(
-                    itemCount: _reports.length,
+                    itemCount: _sessions.length,
                     itemBuilder: (context, index) {
-                      final report = _reports[_reports.length - 1 - index];
-                      return _buildReportCard(report);
+                      final session = _sessions[index];
+                      return _buildSessionCard(session, languageProvider);
                     },
                   ),
           ),
@@ -104,143 +98,142 @@ class _HistoryScreenState extends State<HistoryScreen> {
     );
   }
 
-  Widget _buildReportCard(Map<String, dynamic> report) {
-    final urgency = report['urgencyLevel'] ?? 'unknown';
+  void _confirmClearAll(LanguageProvider languageProvider) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(languageProvider.t('history.clearHistory')),
+        content: Text(languageProvider.t('history.confirmClear')),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(languageProvider.t('common.cancel')),
+          ),
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(context);
+              await StorageService.clearAllChatSessions();
+              _loadSessions();
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text(languageProvider.t('history.clearHistory'))),
+                );
+              }
+            },
+            child: Text(
+              languageProvider.t('common.delete'),
+              style: const TextStyle(color: Colors.red),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
-    Color urgencyColor;
-    switch (urgency) {
-      case 'emergency':
-        urgencyColor = Colors.red;
-        break;
-      case 'doctor':
-        urgencyColor = Colors.orange;
-        break;
-      default:
-        urgencyColor = Colors.green;
+  Widget _buildSessionCard(ChatSession session, LanguageProvider languageProvider) {
+    // Format date
+    final now = DateTime.now();
+    final date = session.lastUpdatedAt;
+    String dateText;
+    
+    if (date.year == now.year && date.month == now.month && date.day == now.day) {
+      dateText = 'Today ${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
+    } else if (date.year == now.year && date.month == now.month && date.day == now.day - 1) {
+      dateText = 'Yesterday ${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
+    } else {
+      dateText = '${date.day}/${date.month}/${date.year}';
     }
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       child: ListTile(
         leading: CircleAvatar(
-          backgroundColor: urgencyColor.withOpacity(0.2),
+          backgroundColor: Theme.of(context).primaryColor.withOpacity(0.1),
           child: Icon(
-            urgency == 'emergency'
-                ? Icons.warning
-                : urgency == 'doctor'
-                    ? Icons.local_hospital
-                    : Icons.check_circle,
-            color: urgencyColor,
+            Icons.chat_bubble_outline,
+            color: Theme.of(context).primaryColor,
           ),
         ),
         title: Text(
-          urgency.toUpperCase(),
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            color: urgencyColor,
-          ),
-        ),
-        subtitle: Text(
-          report['recommendation'] ?? 'No recommendation',
-          maxLines: 2,
+          session.title,
+          style: const TextStyle(fontWeight: FontWeight.bold),
+          maxLines: 1,
           overflow: TextOverflow.ellipsis,
         ),
-        trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-        onTap: () {
-          _showReportDetails(report);
-        },
-      ),
-    );
-  }
-
-  void _showReportDetails(Map<String, dynamic> report) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (context) {
-        return DraggableScrollableSheet(
-          initialChildSize: 0.7,
-          minChildSize: 0.5,
-          maxChildSize: 0.95,
-          expand: false,
-          builder: (context, scrollController) {
-            return SingleChildScrollView(
-              controller: scrollController,
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Center(
-                    child: Container(
-                      width: 40,
-                      height: 4,
-                      decoration: BoxDecoration(
-                        color: Colors.grey.shade300,
-                        borderRadius: BorderRadius.circular(2),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-                  Text(
-                    report['urgencyLevel']?.toUpperCase() ?? 'REPORT',
-                    style: const TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  _buildDetailRow('Recommendation', report['recommendation']),
-                  _buildDetailRow('Explanation', report['explanation']),
-                  if (report['nextSteps'] != null) ...[
-                    const SizedBox(height: 16),
-                    const Text(
-                      'Next Steps:',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    ...(report['nextSteps'] as List).map((step) => Padding(
-                          padding: const EdgeInsets.only(bottom: 4),
-                          child: Text('• $step'),
-                        )),
-                  ],
-                ],
-              ),
-            );
-          },
-        );
-      },
-    );
-  }
-
-  Widget _buildDetailRow(String label, String? value) {
-    if (value == null) return const SizedBox.shrink();
-
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            label,
-            style: const TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.bold,
-              color: Colors.grey,
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              session.preview,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(color: Colors.grey.shade600),
             ),
+            const SizedBox(height: 4),
+            Text(
+              dateText,
+              style: TextStyle(
+                fontSize: 12,
+                color: Colors.grey.shade500,
+              ),
+            ),
+          ],
+        ),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            IconButton(
+              icon: const Icon(Icons.delete_outline, size: 20),
+              onPressed: () => _confirmDeleteSession(session, languageProvider),
+            ),
+            const Icon(Icons.arrow_forward_ios, size: 16),
+          ],
+        ),
+        onTap: () => _openSession(session),
+      ),
+    );
+  }
+
+  void _confirmDeleteSession(ChatSession session, LanguageProvider languageProvider) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(languageProvider.t('chatHistory.deleteConversation')),
+        content: Text(languageProvider.t('chatHistory.deleteConfirm')),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(languageProvider.t('common.cancel')),
           ),
-          const SizedBox(height: 4),
-          Text(
-            value,
-            style: const TextStyle(fontSize: 16),
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(context);
+              await StorageService.deleteChatSession(session.id);
+              _loadSessions();
+            },
+            child: Text(
+              languageProvider.t('common.delete'),
+              style: const TextStyle(color: Colors.red),
+            ),
           ),
         ],
       ),
     );
+  }
+
+  void _openSession(ChatSession session) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => Scaffold(
+          appBar: AppBar(
+            title: Text(session.title),
+            backgroundColor: Theme.of(context).primaryColor,
+            foregroundColor: Colors.white,
+          ),
+          body: ChatScreen(existingSession: session),
+        ),
+      ),
+    ).then((_) => _loadSessions()); // Reload sessions when returning
   }
 }

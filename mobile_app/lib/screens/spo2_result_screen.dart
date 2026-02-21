@@ -1,9 +1,9 @@
-import 'package:arogyaai_app/models/hospital.dart';
-import 'package:arogyaai_app/services/hospital_finder_service.dart';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../models/spo2_reading.dart';
+import '../models/medical_facility.dart';
+import '../services/overpass_service.dart';
 
 class Spo2ResultScreen extends StatefulWidget {
   final Spo2Reading result;
@@ -17,7 +17,7 @@ class Spo2ResultScreen extends StatefulWidget {
 }
 
 class _Spo2ResultScreenState extends State<Spo2ResultScreen> {
-  List<Hospital> _hospitals = [];
+  List<MedicalFacility> _hospitals = [];
   bool _isLoading = false;
   String? _error;
   bool _hospitalsFetched = false;
@@ -38,13 +38,16 @@ class _Spo2ResultScreenState extends State<Spo2ResultScreen> {
     });
 
     try {
-      final hospitals = await HospitalFinderService.findNearbyHospitals(
+      final facilities = await OverpassService.searchNearbyFacilities(
         latitude: widget.position.latitude,
         longitude: widget.position.longitude,
+        facilityType: 'hospital,clinic',
+        limit: 10,
+        radiusMeters: 10000,
       );
       if (mounted) {
         setState(() {
-          _hospitals = hospitals;
+          _hospitals = facilities;
           _hospitalsFetched = true;
         });
       }
@@ -212,26 +215,25 @@ class _Spo2ResultScreenState extends State<Spo2ResultScreen> {
           physics: const NeverScrollableScrollPhysics(),
           itemCount: _hospitals.length,
           itemBuilder: (context, index) {
-            final hospital = _hospitals[index];
+            final facility = _hospitals[index];
             return Card(
               margin: const EdgeInsets.only(bottom: 12),
               child: ListTile(
                 leading: const Icon(Icons.local_hospital, color: Colors.teal),
-                title: Text(hospital.name),
+                title: Text(facility.name),
                 subtitle: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    if (hospital.distance != null)
-                      Text('${hospital.distance!.toStringAsFixed(1)} km away'),
-                    if (hospital.rating != null)
-                      Text('Rating: ${hospital.rating}'),
+                    if (facility.distanceInKm != null)
+                      Text('${facility.distanceInKm!.toStringAsFixed(1)} km away'),
+                    if (facility.address != null)
+                      Text(facility.address!, maxLines: 1, overflow: TextOverflow.ellipsis),
                   ],
                 ),
                 trailing: IconButton(
                   icon: const Icon(Icons.directions),
                   onPressed: () async {
-                    final url =
-                        'https://www.google.com/maps/dir/?api=1&destination=${hospital.latitude},${hospital.longitude}';
+                    final url = facility.googleMapsUrl;
                     if (await canLaunch(url)) {
                       await launch(url);
                     }
